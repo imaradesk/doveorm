@@ -27,6 +27,24 @@ class IntegerField(Field):
                 )
         return value
 
+    def get_prep_value(self, value):
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            raise self._prep_error(value, "an integer")
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+        if isinstance(value, Decimal) and value.is_finite() and value == value.to_integral_value():
+            return int(value)
+        if isinstance(value, str):
+            try:
+                return int(value.strip())
+            except ValueError:
+                pass
+        raise self._prep_error(value, "an integer")
+
 
 class BigIntegerField(IntegerField):
     """64-bit integer.  SQLite: ``INTEGER``, MySQL: ``BIGINT``."""
@@ -60,7 +78,8 @@ class PositiveBigIntegerField(BigIntegerField):
 
 
 class FloatField(Field):
-    """Floating-point column.  SQLite: ``REAL``, MySQL: ``DOUBLE``."""
+    """Floating-point column.  SQLite: ``REAL``, MySQL: ``DOUBLE``,
+    PostgreSQL: ``DOUBLE PRECISION``."""
     def sql_type(self): return "REAL"
 
     def validate(self, value):
@@ -74,11 +93,24 @@ class FloatField(Field):
             raise ValidationError(f"Field '{self.name}' must be a finite number, got {self._shown(value)}.")
         return value
 
+    def get_prep_value(self, value):
+        if value is None:
+            return None
+        if not isinstance(value, bool) and isinstance(value, (int, float, Decimal, str)):
+            try:
+                number = float(value)
+            except ValueError:
+                number = None
+            if number is not None and math.isfinite(number):
+                return number
+        raise self._prep_error(value, "a finite number")
+
 
 class DecimalField(Field):
     """Fixed-precision decimal.  SQLite: ``TEXT`` (stored as a quantized
     string; range comparisons and ordering cast to REAL),
-    MySQL: ``DECIMAL(max_digits, decimal_places)``."""
+    MySQL: ``DECIMAL(max_digits, decimal_places)``,
+    PostgreSQL: ``NUMERIC(max_digits, decimal_places)``."""
 
     numeric_text_on_sqlite = True
 
@@ -96,6 +128,8 @@ class DecimalField(Field):
     def _resolved_type(self, driver=None) -> str:
         if driver is not None and driver.name == "mysql":
             return f"DECIMAL({self.max_digits},{self.decimal_places})"
+        if driver is not None and driver.name == "postgresql":
+            return f"NUMERIC({self.max_digits},{self.decimal_places})"
         return "TEXT"  # SQLite: store as text to preserve precision
 
     def _to_decimal(self, value) -> Decimal:
@@ -145,6 +179,23 @@ class DecimalField(Field):
         if value is None:
             return None
         return str(self._to_decimal(value).quantize(self._quantum))
+
+    def get_prep_value(self, value):
+        if value is None:
+            return None
+        try:
+            dec = self._to_decimal(value)
+        except TypeError:
+            raise self._prep_error(value, "a decimal number") from None
+        if not dec.is_finite():
+            raise self._prep_error(value, "a finite decimal number")
+        try:
+            stored = dec.quantize(self._quantum)
+        except InvalidOperation:
+            return str(dec)
+        # Only use the column's scale when it does not change the value:
+        # "2.499" must stay 2.499 in a comparison, not round to 2.50.
+        return str(stored) if stored == dec else str(dec)
 
     def from_db(self, value):
         if value is None:

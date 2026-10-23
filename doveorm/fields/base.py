@@ -232,6 +232,20 @@ class Field:
     def to_db(self, value):
         return value
 
+    def get_prep_value(self, value):
+        """Convert a lookup value (``where(field=value)``) for the database.
+
+        Constraints such as ``max_length`` do not apply to lookups, but the
+        value must be something the column can hold: a wrong value raises
+        :class:`ValidationError` instead of silently matching the wrong rows.
+        """
+        if value is None:
+            return None
+        return self.to_db(value)
+
+    def _prep_error(self, value, expected: str) -> ValidationError:
+        return ValidationError(f"Field '{self.name}' expected {expected}, got {self._shown(value)}.")
+
     def from_db(self, value):
         return value
 

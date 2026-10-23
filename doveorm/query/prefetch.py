@@ -76,8 +76,10 @@ class PrefetchMixin:
                 pairs: list[tuple[Any, Any]] = []
                 for chunk in _chunks(pk_values):
                     placeholders = ", ".join("?" for _ in chunk)
+                    qn = db.driver.quote_name
                     join_rows = db.execute(
-                        f"SELECT {src_fk}, {tgt_fk} FROM {through} WHERE {src_fk} IN ({placeholders})",
+                        f"SELECT {qn(src_fk)}, {qn(tgt_fk)} FROM {qn(through)} "
+                        f"WHERE {qn(src_fk)} IN ({placeholders})",
                         [src_field.to_db(v) for v in chunk],
                     )
                     pairs.extend(

@@ -2,7 +2,7 @@
 DoveORM Database
 Driver-agnostic façade for database operations.
 
-Supports SQLite (default) and MySQL via pluggable drivers.
+Supports SQLite (default), MySQL and PostgreSQL via pluggable drivers.
 Thread-safe: each thread gets its own connection (handled by the driver).
 Includes optional query logging for debugging.  Bound parameter values
 are *not* logged unless ``log_params=True`` — they routinely contain
@@ -15,6 +15,10 @@ Usage – SQLite:
 Usage – MySQL:
     db = MySQLDatabase(host="localhost", user="app",
                        password="secret", database="myapp")
+
+Usage – PostgreSQL:
+    db = PostgreSQLDatabase(host="localhost", user="app",
+                            password="secret", database="myapp")
 """
 from __future__ import annotations
 
@@ -27,6 +31,7 @@ from .drivers.base import DatabaseDriver
 from .exceptions import ConfigurationError
 from .drivers.sqlite import SQLiteDriver
 from .drivers.mysql import MySQLDriver
+from .drivers.postgresql import PostgreSQLDriver
 
 log = logging.getLogger("doveorm")
 
@@ -38,10 +43,11 @@ class Database:
     Wraps a :class:`DatabaseDriver` and exposes a unified API that
     the rest of the ORM (Model, QuerySet, Fields) programmes against.
 
-    By default uses SQLite.  Pass a driver explicitly for MySQL::
+    By default uses SQLite.  Pass a driver explicitly for MySQL / PostgreSQL::
 
-        from doveorm.drivers import MySQLDriver
+        from doveorm.drivers import MySQLDriver, PostgreSQLDriver
         db = Database(driver=MySQLDriver(host="…", …))
+        db = Database(driver=PostgreSQLDriver(host="…", …))
     """
 
     def __init__(
@@ -247,5 +253,39 @@ class MySQLDatabase(Database):
             host=host, port=port, user=user,
             password=password, database=database,
             charset=charset, **kwargs,
+        )
+        super().__init__(driver=driver, log_queries=log_queries, log_params=log_params)
+
+
+class PostgreSQLDatabase(Database):
+    """
+    Convenience constructor for PostgreSQL connections.
+
+    Usage::
+
+        db = PostgreSQLDatabase(
+            host="localhost",
+            port=5432,
+            user="app",
+            password="secret",
+            database="myapp",
+        )
+    """
+
+    def __init__(
+        self,
+        *,
+        host: str | None = None,
+        port: int = 5432,
+        user: str | None = None,
+        password: str | None = None,
+        database: str | None = None,
+        log_queries: bool = False,
+        log_params: bool = False,
+        **kwargs,
+    ):
+        driver = PostgreSQLDriver(
+            host=host, port=port, user=user,
+            password=password, database=database, **kwargs,
         )
         super().__init__(driver=driver, log_queries=log_queries, log_params=log_params)

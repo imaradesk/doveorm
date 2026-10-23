@@ -73,6 +73,7 @@ class SchemaMixin:
         db = cls._ensure_db()
         driver = db.driver
         table = cls._table_name()
+        qn = driver.quote_name
         is_mysql = driver.name == "mysql"
 
         col_defs = []
@@ -85,7 +86,7 @@ class SchemaMixin:
                     f"{cls.__name__}.{col_name}: MySQL cannot index a {col_type} column "
                     "without a prefix length; use CharField instead."
                 )
-            col_defs.append(f"{col_name} {field.sql_definition(driver)}")
+            col_defs.append(f"{qn(col_name)} {field.sql_definition(driver)}")
             if isinstance(field, ForeignKey):
                 ref_cls = field.target_model()
                 if ref_cls is None:
@@ -94,13 +95,13 @@ class SchemaMixin:
                         "which is not defined yet."
                     )
                 fk_clauses.append(
-                    f"FOREIGN KEY ({col_name}) REFERENCES "
-                    f"{ref_cls._table_name()}({ref_cls._pk_field()}) ON DELETE {field.on_delete}"
+                    f"FOREIGN KEY ({qn(col_name)}) REFERENCES "
+                    f"{qn(ref_cls._table_name())}({qn(ref_cls._pk_field())}) ON DELETE {field.on_delete}"
                 )
 
         guard = "IF NOT EXISTS " if if_not_exists else ""
         body = ",\n    ".join(col_defs + fk_clauses)
-        ddl = f"CREATE TABLE {guard}{table} (\n    {body}\n)"
+        ddl = f"CREATE TABLE {guard}{qn(table)} (\n    {body}\n)"
 
         # MySQL: add engine specification
         if is_mysql:
@@ -128,4 +129,4 @@ class SchemaMixin:
     def drop_table(cls, if_exists=True):
         db = cls._ensure_db()
         guard = "IF EXISTS " if if_exists else ""
-        db.execute_ddl(f"DROP TABLE {guard}{cls._table_name()}")
+        db.execute_ddl(f"DROP TABLE {guard}{db.driver.quote_name(cls._table_name())}")

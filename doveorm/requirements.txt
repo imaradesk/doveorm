@@ -3,3 +3,5 @@
 # doveorm.toml with: tomli>=1.1
 # Optional – MySQL backend (pip install "doveorm[mysql]"):
 # mysqlclient>=2.1
+# Optional – PostgreSQL backend (pip install "doveorm[postgres]"):
+# psycopg[binary]>=3.1        (psycopg2>=2.9 also works)

@@ -83,10 +83,14 @@ class ManyToManyManager:
         if not pks:
             return
         items = self._items                      # load current state first
-        ignore = self._db.driver.insert_ignore_prefix()
+        driver = self._db.driver
+        qn = driver.quote_name
+        ignore = driver.insert_ignore_prefix()
+        on_conflict = driver.insert_ignore_suffix()
         src_db = self._src_field.to_db(self._src_pk_val)
         self._db.execute_many(
-            f"{ignore} INTO {self._through} ({self._src_fk}, {self._tgt_fk}) VALUES (?, ?)",
+            f"{ignore} INTO {qn(self._through)} ({qn(self._src_fk)}, {qn(self._tgt_fk)}) VALUES (?, ?)"
+            f"{on_conflict}",
             [[src_db, self._tgt_field.to_db(pk)] for pk in pks],
         )
         # Avoid duplicates in the in-memory list
@@ -104,13 +108,14 @@ class ManyToManyManager:
         if not pks:
             return
         src_db = self._src_field.to_db(self._src_pk_val)
+        qn = self._db.driver.quote_name
         with self._db.transaction():
             for i in range(0, len(pks), 500):
                 chunk = pks[i:i + 500]
                 placeholders = ", ".join("?" for _ in chunk)
                 self._db.execute_write(
-                    f"DELETE FROM {self._through} WHERE {self._src_fk} = ? "
-                    f"AND {self._tgt_fk} IN ({placeholders})",
+                    f"DELETE FROM {qn(self._through)} WHERE {qn(self._src_fk)} = ? "
+                    f"AND {qn(self._tgt_fk)} IN ({placeholders})",
                     [src_db] + [self._tgt_field.to_db(pk) for pk in chunk],
                 )
         if self._loaded is not None:
@@ -120,8 +125,9 @@ class ManyToManyManager:
     def clear(self) -> None:
         """Remove every relation for this instance."""
         self._require_source()
+        qn = self._db.driver.quote_name
         self._db.execute_write(
-            f"DELETE FROM {self._through} WHERE {self._src_fk} = ?",
+            f"DELETE FROM {qn(self._through)} WHERE {qn(self._src_fk)} = ?",
             [self._src_field.to_db(self._src_pk_val)],
         )
         self._loaded = []
@@ -172,10 +178,11 @@ class ManyToMany(RelationshipDescriptor):
         def loader() -> list:
             if pk_val is None:
                 return []
+            qn = db.driver.quote_name
             sql = (
-                f"SELECT r.* FROM {related_cls._table_name()} r "
-                f"JOIN {through} j ON j.{tgt_fk} = r.{related_cls._pk_field()} "
-                f"WHERE j.{src_fk} = ?"
+                f"SELECT r.* FROM {qn(related_cls._table_name())} r "
+                f"JOIN {qn(through)} j ON j.{qn(tgt_fk)} = r.{qn(related_cls._pk_field())} "
+                f"WHERE j.{qn(src_fk)} = ?"
             )
             rows = db.execute(sql, [src_field.to_db(pk_val)])
             return [related_cls._from_row(row) for row in rows]

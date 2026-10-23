@@ -123,7 +123,7 @@ def build_parser(prog: str = PROG) -> argparse.ArgumentParser:
     s = cmd("console", "interactive Python shell with the models loaded")
     s.add_argument("--plain", action="store_true", help="plain Python shell even if IPython is installed")
 
-    cmd("connect", "open the database's own command-line client (sqlite3 / mysql)")
+    cmd("connect", "open the database's own command-line client (sqlite3 / mysql / psql)")
     return p
 
 
@@ -482,6 +482,8 @@ def cmd_connect(project: Project, args) -> int:
         if getattr(driver, "_memory", False):
             raise ConfigurationError("An in-memory database has no client to connect to.")
         return _run_client("sqlite3", [driver.path])
+    if driver.name == "postgresql":
+        return _connect_psql(driver)
     cfg = dict(driver._cfg)
     # The password goes in a private option file, never on the command line
     # (where other users could read it from the process list).
@@ -504,11 +506,33 @@ def cmd_connect(project: Project, args) -> int:
         os.unlink(option_file)
 
 
-def _run_client(program: str, argv: list[str]) -> int:
+def _connect_psql(driver) -> int:
+    cfg = dict(driver._cfg)
+    # The password goes in a private passfile, never on the command line.
+    fd, passfile = tempfile.mkstemp(prefix="doveorm-", suffix=".pgpass")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            esc = lambda v: str(v).replace("\\", "\\\\").replace(":", "\\:")  # noqa: E731
+            fh.write(":".join(esc(v) for v in ("*", "*", "*", cfg["user"], cfg.get("password") or "")) + "\n")
+        env = dict(os.environ, PGPASSFILE=passfile)
+        if cfg.get("sslmode"):
+            env["PGSSLMODE"] = str(cfg["sslmode"])
+        argv = [f"--host={cfg['host']}", f"--port={cfg['port']}",
+                f"--username={cfg['user']}", f"--dbname={cfg['dbname']}"]
+        if driver.schema:
+            env["PGOPTIONS"] = f"-c search_path={driver.schema}"
+        return _run_client("psql", argv, env=env)
+    finally:
+        os.unlink(passfile)
+
+
+def _run_client(program: str, argv: list[str], env: dict | None = None) -> int:
     path = shutil.which(program)
     if path is None:
         raise ConfigurationError(f"'{program}' was not found on PATH; install the {program} client.")
-    return subprocess.call([path, *argv])
+    if env is None:
+        return subprocess.call([path, *argv])
+    return subprocess.call([path, *argv], env=env)
 
 
 # ──────────────────────────────────────────────

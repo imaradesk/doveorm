@@ -8,8 +8,23 @@ from ..exceptions import ValidationError
 from .base import Field
 
 
+def _check_text(field, value):
+    """Reject NUL characters: PostgreSQL cannot store them and C clients truncate at them."""
+    if "\x00" in value:
+        raise ValidationError(f"Field '{field.name}' must not contain NUL (\\x00) characters.")
+    return value
+
+
+def _prep_text(field, value):
+    if value is None:
+        return None
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        raise field._prep_error(value, "text")
+    return _check_text(field, value if isinstance(value, str) else str(value))
+
+
 class CharField(Field):
-    """Fixed-max-length string.  SQLite: ``TEXT``, MySQL: ``VARCHAR(n)``."""
+    """Fixed-max-length string.  SQLite: ``TEXT``, MySQL / PostgreSQL: ``VARCHAR(n)``."""
 
     def __init__(self, max_length=255, **kwargs):
         super().__init__(**kwargs)
@@ -20,7 +35,7 @@ class CharField(Field):
     def sql_type(self): return "VARCHAR"
 
     def _resolved_type(self, driver=None) -> str:
-        if driver is not None and driver.name == "mysql":
+        if driver is not None and driver.name in ("mysql", "postgresql"):
             return f"VARCHAR({self.max_length})"
         return "TEXT"
 
@@ -29,22 +44,29 @@ class CharField(Field):
         if value is not None:
             if not isinstance(value, str):
                 raise TypeError(f"Field '{self.name}' expects str, got {type(value).__name__}.")
+            _check_text(self, value)
             if len(value) > self.max_length:
                 raise ValidationError(
                     f"Field '{self.name}' value exceeds max_length={self.max_length}."
                 )
         return value
 
+    def get_prep_value(self, value):
+        return _prep_text(self, value)
+
 
 class TextField(Field):
-    """Unlimited-length text.  SQLite: ``TEXT``, MySQL: ``LONGTEXT``."""
+    """Unlimited-length text.  SQLite / PostgreSQL: ``TEXT``, MySQL: ``LONGTEXT``."""
     def sql_type(self): return "TEXT"
 
     def validate(self, value):
         value = super().validate(value)
         if value is not None and not isinstance(value, str):
             raise TypeError(f"Field '{self.name}' expects str, got {type(value).__name__}.")
-        return value
+        return None if value is None else _check_text(self, value)
+
+    def get_prep_value(self, value):
+        return _prep_text(self, value)
 
 
 class SlugField(CharField):

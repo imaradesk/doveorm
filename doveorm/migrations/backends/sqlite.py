@@ -69,7 +69,7 @@ class SQLiteSchemaEditor(BaseSchemaEditor):
         for table in sorted(self._touched):
             if not self.db.table_exists(table):
                 continue
-            rows = self.db.execute(f"PRAGMA foreign_key_check({table})")
+            rows = self.db.execute(f"PRAGMA foreign_key_check({self.qn(table)})")
             if rows:
                 raise MigrationError(
                     f"Migration would leave {len(rows)} row(s) in {table!r} with a broken "
@@ -91,11 +91,11 @@ class SQLiteSchemaEditor(BaseSchemaEditor):
     def create_model(self, ms: "ModelState", state: "ProjectState", *, table: str | None = None,
                      with_indexes: bool = True) -> None:
         table = table or ms.table
-        cols = [f"{name} {self.column_sql(field, state)}" for name, field in ms.fields.items()]
+        cols = [f"{self.qn(name)} {self.column_sql(field, state)}" for name, field in ms.fields.items()]
         fks = [self.fk_clause(table, name, field, state)
                for name, field in ms.fields.items() if isinstance(field, ForeignKey)]
         body = ",\n    ".join(cols + fks)
-        self.execute(f"CREATE TABLE {table} (\n    {body}\n)")
+        self.execute(f"CREATE TABLE {self.qn(table)} (\n    {body}\n)")
         self._touched.add(ms.table)
         if with_indexes:
             for name, cols_, unique in self.index_specs(ms):
@@ -109,12 +109,13 @@ class SQLiteSchemaEditor(BaseSchemaEditor):
                 self._touched.add(other.table)
 
     def rename_table(self, old_table: str, new_table: str) -> None:
-        self.execute(f"ALTER TABLE {old_table} RENAME TO {new_table}")
+        self.execute(f"ALTER TABLE {self.qn(old_table)} RENAME TO {self.qn(new_table)}")
         self._touched.add(new_table)
 
     def create_index(self, table, name, columns, unique) -> None:
         kind = "UNIQUE INDEX" if unique else "INDEX"
-        self.execute(f"CREATE {kind} IF NOT EXISTS {name} ON {table} ({', '.join(columns)})")
+        qn = self.qn
+        self.execute(f"CREATE {kind} IF NOT EXISTS {qn(name)} ON {qn(table)} ({', '.join(qn(c) for c in columns)})")
 
     def drop_index(self, table, name, columns, unique) -> None:
         if not self.collect_sql and not self.db.index_exists(table, name):
@@ -122,13 +123,13 @@ class SQLiteSchemaEditor(BaseSchemaEditor):
             if found is None:
                 return
             name = found
-        self.execute(f"DROP INDEX IF EXISTS {name}")
+        self.execute(f"DROP INDEX IF EXISTS {self.qn(name)}")
 
     def _find_index(self, table, columns, unique) -> str | None:
-        for row in self.db.execute(f"PRAGMA index_list({table})"):
+        for row in self.db.execute(f"PRAGMA index_list({self.qn(table)})"):
             if row["origin"] != "c" or bool(row["unique"]) != unique:
                 continue
-            cols = tuple(r["name"] for r in self.db.execute(f"PRAGMA index_info({row['name']})"))
+            cols = tuple(r["name"] for r in self.db.execute(f"PRAGMA index_info({self.qn(row['name'])})"))
             if cols == tuple(columns):
                 return row["name"]
         return None
@@ -151,10 +152,11 @@ class SQLiteSchemaEditor(BaseSchemaEditor):
         definition = self.column_sql(field, state)
         if is_fk:
             target = state.target_of(field)
-            definition += f" REFERENCES {target.table}({target.pk_name}) ON DELETE {field.on_delete}"
-        self.execute(f"ALTER TABLE {after.table} ADD COLUMN {name} {definition}")
+            definition += (f" REFERENCES {self.qn(target.table)}({self.qn(target.pk_name)}) "
+                           f"ON DELETE {field.on_delete}")
+        self.execute(f"ALTER TABLE {self.qn(after.table)} ADD COLUMN {self.qn(name)} {definition}")
         if backfill is not NOT_PROVIDED:
-            self.execute(f"UPDATE {after.table} SET {name} = "
+            self.execute(f"UPDATE {self.qn(after.table)} SET {self.qn(name)} = "
                          f"{self.backfill_literal(field, backfill, state)}")
         self._touched.add(after.table)
         if field.db_index:
@@ -167,7 +169,7 @@ class SQLiteSchemaEditor(BaseSchemaEditor):
         old, new = before.fields[name], after.fields[name]
         fill = {}
         if backfill is not NOT_PROVIDED:
-            fill[name] = f"COALESCE({name}, {self.backfill_literal(new, backfill, state_after)})"
+            fill[name] = f"COALESCE({self.qn(name)}, {self.backfill_literal(new, backfill, state_after)})"
         if (not fill and self.column_type(old, state_before) == self.column_type(new, state_after)
                 and self._same_except_index(old, new)):
             self.sync_indexes(before, after)     # only db_index changed
@@ -182,7 +184,7 @@ class SQLiteSchemaEditor(BaseSchemaEditor):
 
     def rename_field(self, before, after, old, new, state) -> None:
         if _RENAME_COLUMN:
-            self.execute(f"ALTER TABLE {after.table} RENAME COLUMN {old} TO {new}")
+            self.execute(f"ALTER TABLE {self.qn(after.table)} RENAME COLUMN {self.qn(old)} TO {self.qn(new)}")
             self._touched.add(after.table)
         else:  # pragma: no cover - SQLite < 3.25
             self._remake(before, after, state, renames={new: old})
@@ -206,7 +208,7 @@ class SQLiteSchemaEditor(BaseSchemaEditor):
             if name in fill:
                 expr = fill[name]
             elif renames.get(name, name) in before.fields:
-                expr = renames.get(name, name)
+                expr = self.qn(renames.get(name, name))
             else:
                 expr = self.default_literal(field, state)
                 if expr is None:
@@ -216,12 +218,12 @@ class SQLiteSchemaEditor(BaseSchemaEditor):
                             "existing rows need a backfill value."
                         )
                     continue
-            targets.append(name)
+            targets.append(self.qn(name))
             sources.append(expr)
-        self.execute(f"INSERT INTO {tmp} ({', '.join(targets)}) "
-                     f"SELECT {', '.join(sources)} FROM {before.table}")
-        self.execute(f"DROP TABLE {before.table}")
-        self.execute(f"ALTER TABLE {tmp} RENAME TO {after.table}")
+        self.execute(f"INSERT INTO {self.qn(tmp)} ({', '.join(targets)}) "
+                     f"SELECT {', '.join(sources)} FROM {self.qn(before.table)}")
+        self.execute(f"DROP TABLE {self.qn(before.table)}")
+        self.execute(f"ALTER TABLE {self.qn(tmp)} RENAME TO {self.qn(after.table)}")
         for name, cols, unique in self.index_specs(after):
             self.create_index(after.table, name, cols, unique)
         self._touched.add(after.table)
@@ -229,4 +231,4 @@ class SQLiteSchemaEditor(BaseSchemaEditor):
     # ── introspection ──
 
     def column_names(self, table: str) -> set[str]:
-        return {row["name"] for row in self.db.execute(f"PRAGMA table_info({table})")}
+        return {row["name"] for row in self.db.execute(f"PRAGMA table_info({self.qn(table)})")}

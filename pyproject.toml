@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "doveorm"
 dynamic = ["version"]
-description = "A lightweight, security-hardened Python ORM for SQLite and MySQL."
+description = "A lightweight, security-hardened Python ORM for SQLite, MySQL and PostgreSQL."
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [{ name = "Titus Kilunda" }]
-keywords = ["orm", "database", "sqlite", "mysql", "migrations"]
+keywords = ["orm", "database", "sqlite", "mysql", "postgresql", "migrations"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
@@ -23,6 +23,8 @@ dependencies = ["tomli>=1.1; python_version < '3.11'"]
 
 [project.optional-dependencies]
 mysql = ["mysqlclient>=2.1"]
+postgres = ["psycopg[binary]>=3.1"]
+postgresql = ["psycopg[binary]>=3.1"]
 
 [project.scripts]
 doveorm = "doveorm.cli:main"

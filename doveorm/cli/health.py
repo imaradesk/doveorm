@@ -71,6 +71,13 @@ def database_info(db) -> DatabaseInfo:
             path = db.driver.path
             if not getattr(db.driver, "_memory", False) and os.path.isfile(path):
                 info.extra["size"] = _size(os.path.getsize(path))
+        elif info.engine == "postgresql":
+            row = db.execute("SELECT current_setting('server_version'), "
+                             "current_setting('server_encoding'), current_schema()")
+            if row:
+                info.server_version = "PostgreSQL " + str(row[0][0])
+                info.extra["encoding"] = row[0][1]
+                info.extra["schema"] = row[0][2]
         else:
             row = db.execute("SELECT VERSION(), @@character_set_database, @@SESSION.sql_mode")
             if row:
@@ -88,6 +95,11 @@ def list_tables(db) -> list[str]:
         rows = db.execute(
             "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
             "ORDER BY name"
+        )
+    elif db.driver_name == "postgresql":
+        rows = db.execute(
+            "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = current_schema() "
+            "ORDER BY tablename"
         )
     else:
         rows = db.execute(
@@ -223,7 +235,8 @@ def run_checks(db, directory: str, models=None) -> list[Check]:
     else:
         checks.append(Check("database schema", OK, "every model table and column exists"))
 
-    checks.extend(_sqlite_checks(db) if info.engine == "sqlite" else _mysql_checks(db))
+    backend_checks = {"sqlite": _sqlite_checks, "postgresql": _postgresql_checks}
+    checks.extend(backend_checks.get(info.engine, _mysql_checks)(db))
     checks.extend(_settings_checks())
     return checks
 
@@ -273,6 +286,33 @@ def _mysql_checks(db) -> list[Check]:
     local = host in ("", "localhost", "127.0.0.1", "::1")
     if cipher:
         out.append(Check("tls", OK, cipher))
+    else:
+        out.append(Check("tls", OK if local else WARN,
+                         "local connection" if local else "connection is not encrypted"))
+    return out
+
+
+def _postgresql_checks(db) -> list[Check]:
+    out = []
+    try:
+        row = db.execute("SELECT current_setting('server_encoding'), "
+                         "current_setting('standard_conforming_strings')")
+    except Exception as exc:                    # pragma: no cover - server specific
+        return [Check("server settings", WARN, f"could not read: {exc}")]
+    if row:
+        encoding, scs = str(row[0][0] or ""), str(row[0][1] or "")
+        out.append(Check("encoding", OK if encoding.upper() == "UTF8" else WARN,
+                         encoding if encoding.upper() == "UTF8" else f"{encoding} — UTF8 is recommended"))
+        out.append(Check("standard_conforming_strings", OK if scs == "on" else FAIL,
+                         scs if scs == "on" else f"{scs} — DoveORM quotes literals assuming 'on'"))
+    try:
+        ssl = db.execute("SELECT ssl, cipher FROM pg_catalog.pg_stat_ssl WHERE pid = pg_backend_pid()")
+    except Exception:                           # pragma: no cover
+        ssl = []
+    host = str(getattr(db.driver, "_cfg", {}).get("host") or "")
+    local = host in ("", "localhost", "127.0.0.1", "::1") or host.startswith("/")
+    if ssl and ssl[0][0]:
+        out.append(Check("tls", OK, str(ssl[0][1])))
     else:
         out.append(Check("tls", OK if local else WARN,
                          "local connection" if local else "connection is not encrypted"))

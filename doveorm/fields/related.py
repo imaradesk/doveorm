@@ -77,6 +77,11 @@ class ForeignKey(Field):
         target = self.target_field()
         return target.to_db(value) if target is not None and value is not None else value
 
+    def get_prep_value(self, value):
+        value = self._unwrap(value)
+        target = self.target_field()
+        return target.get_prep_value(value) if target is not None and value is not None else value
+
     def from_db(self, value):
         target = self.target_field()
         return target.from_db(value) if target is not None and value is not None else value

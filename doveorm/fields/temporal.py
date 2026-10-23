@@ -82,7 +82,7 @@ class DateField(_AutoNowMixin, Field):
 
 class DateTimeField(_AutoNowMixin, Field):
     """DateTime.  SQLite: ``TEXT`` (``YYYY-MM-DD HH:MM:SS[.ffffff]``),
-    MySQL: ``DATETIME(6)``.
+    MySQL: ``DATETIME(6)``, PostgreSQL: ``TIMESTAMP`` (microseconds).
 
     Aware datetimes are converted to UTC before storage.  With
     ``use_tz=True`` (or the global ``USE_TZ`` setting) values read back are

@@ -6,12 +6,17 @@ Connection details are never guessed:
 * MySQL needs ``DATABASE_NAME``, ``DATABASE_USER`` and ``DATABASE_PASSWORD``
   (``""`` is accepted but must be explicit), plus ``DATABASE_HOST`` unless
   ``DATABASE_OPTIONS["unix_socket"]`` is given.
+* PostgreSQL needs ``DATABASE_NAME``, ``DATABASE_USER``, ``DATABASE_PASSWORD``
+  and ``DATABASE_HOST`` (a socket directory such as ``/var/run/postgresql``
+  is a valid host).
 """
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from ..exceptions import ConfigurationError
+
+DEFAULT_PORTS = {"mysql": 3306, "postgresql": 5432}
 
 if TYPE_CHECKING:
     from ..database import Database
@@ -29,7 +34,7 @@ def build_database(settings: dict) -> "Database":
         engine=str(settings["DATABASE_ENGINE"]),
         path=settings.get("DATABASE_PATH") or settings.get("DATABASE_NAME"),
         host=settings.get("DATABASE_HOST"),
-        port=settings.get("DATABASE_PORT", 3306),
+        port=settings.get("DATABASE_PORT"),
         user=settings.get("DATABASE_USER"),
         password=settings.get("DATABASE_PASSWORD"),
         name=settings.get("DATABASE_NAME"),
@@ -45,7 +50,7 @@ def _build_from_db_dict(d: dict, settings: dict) -> "Database":
         engine=str(d.get("ENGINE", "sqlite")),
         path=d.get("NAME"),
         host=d.get("HOST"),
-        port=d.get("PORT", 3306),
+        port=d.get("PORT"),
         user=d.get("USER"),
         password=d.get("PASSWORD"),
         name=d.get("NAME"),
@@ -57,7 +62,7 @@ def _build_from_db_dict(d: dict, settings: dict) -> "Database":
 
 def _construct(*, engine, path, host, port, user, password, name, charset,
                options, settings) -> "Database":
-    from ..database import Database, MySQLDatabase
+    from ..database import Database, MySQLDatabase, PostgreSQLDatabase
     from ..drivers.sqlite import SQLiteDriver
 
     engine = engine.lower()
@@ -66,6 +71,10 @@ def _construct(*, engine, path, host, port, user, password, name, charset,
         engine = "sqlite"
     elif "mysql" in engine:
         engine = "mysql"
+    elif "postgres" in engine or engine in ("pg", "pgsql", "psycopg", "psycopg2"):
+        engine = "postgresql"
+    if port in (None, "") and engine in DEFAULT_PORTS:
+        port = DEFAULT_PORTS[engine]
 
     if not isinstance(options, dict):
         raise ConfigurationError("DATABASE_OPTIONS / OPTIONS must be a dict.")
@@ -112,6 +121,30 @@ def _construct(*, engine, path, host, port, user, password, name, charset,
             **options,
         )
 
+    if engine == "postgresql":
+        missing = [label for label, value in (("DATABASE_NAME", name), ("DATABASE_USER", user),
+                                              ("DATABASE_HOST", host)) if not value]
+        if password is None:
+            missing.append("DATABASE_PASSWORD (use '' explicitly for passwordless auth)")
+        if missing:
+            raise ConfigurationError(
+                "Missing required PostgreSQL setting(s): " + "; ".join(missing) + "."
+            )
+        try:
+            port = int(port)
+        except (TypeError, ValueError):
+            raise ConfigurationError(f"DATABASE_PORT must be an integer, got {port!r}.") from None
+        return PostgreSQLDatabase(
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            database=name,
+            log_queries=log_queries,
+            log_params=log_params,
+            **options,
+        )
+
     raise ConfigurationError(
-        f"Unknown DATABASE_ENGINE {engine!r}.  Supported: 'sqlite', 'mysql'."
+        f"Unknown DATABASE_ENGINE {engine!r}.  Supported: 'sqlite', 'mysql', 'postgresql'."
     )
