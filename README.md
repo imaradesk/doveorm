@@ -56,26 +56,26 @@
 DoveORM is a normal pip package (Python 3.9+). Install it straight from the Git repository:
 
 ```bash
-pip install "doveorm @ git+https://github.com/imaradesk/imara-orm.git"
+pip install "doveorm @ git+https://github.com/imaradesk/doveorm.git"
 
 # with MySQL / MariaDB support (adds mysqlclient)
-pip install "doveorm[mysql] @ git+https://github.com/imaradesk/imara-orm.git"
+pip install "doveorm[mysql] @ git+https://github.com/imaradesk/doveorm.git"
 
 # pin a tag, branch or commit
-pip install "doveorm @ git+https://github.com/imaradesk/imara-orm.git@v0.5.0"
+pip install "doveorm @ git+https://github.com/imaradesk/doveorm.git@v0.5.0"
 ```
 
 In a `requirements.txt`:
 
 ```text
-doveorm[mysql] @ git+https://github.com/imaradesk/imara-orm.git@v0.5.0
+doveorm[mysql] @ git+https://github.com/imaradesk/doveorm.git@v0.5.0
 ```
 
 From a local clone (`-e` for an editable install while you work on DoveORM itself):
 
 ```bash
-git clone https://github.com/imaradesk/imara-orm.git
-pip install -e ./imara-orm
+git clone https://github.com/imaradesk/doveorm.git
+pip install -e ./doveorm
 ```
 
 Installing gives you the `doveorm` package and the [`doveorm` command](#%EF%B8%8F-the-doveorm-command).

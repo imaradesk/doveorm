@@ -28,7 +28,7 @@ mysql = ["mysqlclient>=2.1"]
 doveorm = "doveorm.cli:main"
 
 [project.urls]
-Repository = "https://github.com/imaradesk/imara-orm"
+Repository = "https://github.com/imaradesk/doveorm"
 
 [tool.setuptools.packages.find]
 include = ["doveorm", "doveorm.*"]
