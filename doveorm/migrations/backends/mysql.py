@@ -50,24 +50,24 @@ class MySQLSchemaEditor(BaseSchemaEditor):
         cols, fks = [], []
         for name, field in ms.fields.items():
             self.check_column(ms, name, field, state)
-            cols.append(f"{name} {self.column_sql(field, state)}")
+            cols.append(f"{self.qn(name)} {self.column_sql(field, state)}")
             if isinstance(field, ForeignKey):
                 fks.append(self.fk_clause(ms.table, name, field, state))
         body = ",\n    ".join(cols + fks)
         engine = ms.options["engine"] or "InnoDB"
         charset = ms.options["charset"] or "utf8mb4"
-        self.execute(f"CREATE TABLE {ms.table} (\n    {body}\n) ENGINE={engine} DEFAULT CHARSET={charset}")
+        self.execute(f"CREATE TABLE {self.qn(ms.table)} (\n    {body}\n) ENGINE={engine} DEFAULT CHARSET={charset}")
         for name, cols_, unique in self.index_specs(ms):
             self.create_index(ms.table, name, cols_, unique)
 
     def rename_table(self, old_table: str, new_table: str) -> None:
-        self.execute(f"RENAME TABLE {old_table} TO {new_table}")
+        self.execute(f"RENAME TABLE {self.qn(old_table)} TO {self.qn(new_table)}")
 
     def alter_table_options(self, before, after) -> None:
         if (before.options["engine"] or "InnoDB") != (after.options["engine"] or "InnoDB"):
-            self.execute(f"ALTER TABLE {after.table} ENGINE={after.options['engine'] or 'InnoDB'}")
+            self.execute(f"ALTER TABLE {self.qn(after.table)} ENGINE={after.options['engine'] or 'InnoDB'}")
         if (before.options["charset"] or "utf8mb4") != (after.options["charset"] or "utf8mb4"):
-            self.execute(f"ALTER TABLE {after.table} CONVERT TO CHARACTER SET "
+            self.execute(f"ALTER TABLE {self.qn(after.table)} CONVERT TO CHARACTER SET "
                          f"{after.options['charset'] or 'utf8mb4'}")
 
     # ── indexes / constraints ──
@@ -78,7 +78,7 @@ class MySQLSchemaEditor(BaseSchemaEditor):
             if found is None:
                 return
             name = found
-        self.execute(f"DROP INDEX {name} ON {table}")
+        self.execute(f"DROP INDEX {self.qn(name)} ON {self.qn(table)}")
 
     def _find_index(self, table, columns, unique) -> str | None:
         rows = self.db.execute(
@@ -109,10 +109,10 @@ class MySQLSchemaEditor(BaseSchemaEditor):
 
     def _drop_fks(self, table: str, column: str) -> None:
         for name in self._fk_names(table, column):
-            self.execute(f"ALTER TABLE {table} DROP FOREIGN KEY {name}")
+            self.execute(f"ALTER TABLE {self.qn(table)} DROP FOREIGN KEY {self.qn(name)}")
 
     def _add_fk(self, table: str, name: str, field: ForeignKey, state) -> None:
-        self.execute(f"ALTER TABLE {table} ADD {self.fk_clause(table, name, field, state)}")
+        self.execute(f"ALTER TABLE {self.qn(table)} ADD {self.fk_clause(table, name, field, state)}")
 
     # ── columns ──
 
@@ -124,11 +124,12 @@ class MySQLSchemaEditor(BaseSchemaEditor):
         if temp_default:
             # Existing rows take the backfill through a temporary DEFAULT.
             definition += f" DEFAULT {self.backfill_literal(field, backfill, state)}"
-        self.execute(f"ALTER TABLE {after.table} ADD COLUMN {name} {definition}")
+        table, col = self.qn(after.table), self.qn(name)
+        self.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
         if temp_default:
-            self.execute(f"ALTER TABLE {after.table} ALTER COLUMN {name} DROP DEFAULT")
+            self.execute(f"ALTER TABLE {table} ALTER COLUMN {col} DROP DEFAULT")
         elif backfill is not NOT_PROVIDED:
-            self.execute(f"UPDATE {after.table} SET {name} = "
+            self.execute(f"UPDATE {table} SET {col} = "
                          f"{self.backfill_literal(field, backfill, state)}")
         if isinstance(field, ForeignKey):
             self._add_fk(after.table, name, field, state)
@@ -139,7 +140,7 @@ class MySQLSchemaEditor(BaseSchemaEditor):
         if isinstance(before.fields[name], ForeignKey):
             self._drop_fks(before.table, name)
         # Indexes made only of this column disappear with it.
-        self.execute(f"ALTER TABLE {before.table} DROP COLUMN {name}")
+        self.execute(f"ALTER TABLE {self.qn(before.table)} DROP COLUMN {self.qn(name)}")
 
     def alter_field(self, before, after, name, state_before, state_after, backfill=NOT_PROVIDED) -> None:
         old, new = before.fields[name], after.fields[name]
@@ -168,14 +169,15 @@ class MySQLSchemaEditor(BaseSchemaEditor):
         for child_ms, child_name, _ in children:
             self._drop_fks(child_ms.table, child_name)
 
+        qn = self.qn
         if backfill is not NOT_PROVIDED:
-            self.execute(f"UPDATE {table} SET {name} = ? WHERE {name} IS NULL",
+            self.execute(f"UPDATE {qn(table)} SET {qn(name)} = ? WHERE {qn(name)} IS NULL",
                          [self._backfill_param(new, backfill, state_after)])
-        self.execute(f"ALTER TABLE {table} MODIFY COLUMN {name} "
+        self.execute(f"ALTER TABLE {qn(table)} MODIFY COLUMN {qn(name)} "
                      f"{self.column_sql(new, state_after, inline_unique=False, inline_primary_key=False)}")
 
         for child_ms, child_name, child in children:
-            self.execute(f"ALTER TABLE {child_ms.table} MODIFY COLUMN {child_name} "
+            self.execute(f"ALTER TABLE {qn(child_ms.table)} MODIFY COLUMN {qn(child_name)} "
                          f"{self.column_sql(child, state_after, inline_unique=False)}")
             self._add_fk(child_ms.table, child_name, child, state_after)
 
@@ -193,7 +195,7 @@ class MySQLSchemaEditor(BaseSchemaEditor):
 
     def rename_field(self, before, after, old, new, state) -> None:
         field = after.fields[new]
-        self.execute(f"ALTER TABLE {after.table} CHANGE {old} {new} "
+        self.execute(f"ALTER TABLE {self.qn(after.table)} CHANGE {self.qn(old)} {self.qn(new)} "
                      f"{self.column_sql(field, state, inline_unique=False, inline_primary_key=False)}")
 
     # ── introspection ──

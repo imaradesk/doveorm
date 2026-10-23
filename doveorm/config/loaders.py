@@ -30,7 +30,7 @@ def load_env_settings(prefix: str = "DOVEORM_") -> dict[str, Any]:
                 overrides[key] = False
             else:
                 raise ConfigurationError(f"{env_key} must be a boolean, got {val!r}.")
-        elif isinstance(default, int):
+        elif isinstance(default, int) or key == "DATABASE_PORT":
             try:
                 overrides[key] = int(val)
             except ValueError:

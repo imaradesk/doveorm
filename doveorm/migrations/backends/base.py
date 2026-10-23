@@ -36,6 +36,7 @@ class BaseSchemaEditor:
     def __init__(self, db, *, atomic: bool = True, collect_sql: bool = False):
         self.db = db
         self.driver = db.driver
+        self.qn = db.driver.quote_name
         self.atomic = atomic
         self.collect_sql = collect_sql
         self.collected: list[str] = []
@@ -93,8 +94,9 @@ class BaseSchemaEditor:
 
     def fk_clause(self, table: str, name: str, field: ForeignKey, state: "ProjectState") -> str:
         target = state.target_of(field)
-        return (f"CONSTRAINT {self.fk_constraint_name(table, name)} FOREIGN KEY ({name}) "
-                f"REFERENCES {target.table}({target.pk_name}) ON DELETE {field.on_delete}")
+        qn = self.qn
+        return (f"CONSTRAINT {qn(self.fk_constraint_name(table, name))} FOREIGN KEY ({qn(name)}) "
+                f"REFERENCES {qn(target.table)}({qn(target.pk_name)}) ON DELETE {field.on_delete}")
 
     def backfill_literal(self, field: Field, value, state: "ProjectState") -> str:
         """SQL literal for a one-off value used to fill existing rows."""
@@ -133,7 +135,8 @@ class BaseSchemaEditor:
 
     def create_index(self, table: str, name: str, columns: Sequence[str], unique: bool) -> None:
         kind = "UNIQUE INDEX" if unique else "INDEX"
-        self.execute(f"CREATE {kind} {name} ON {table} ({', '.join(columns)})")
+        qn = self.qn
+        self.execute(f"CREATE {kind} {qn(name)} ON {qn(table)} ({', '.join(qn(c) for c in columns)})")
 
     def drop_index(self, table: str, name: str, columns: Sequence[str], unique: bool) -> None:
         raise NotImplementedError
@@ -157,7 +160,7 @@ class BaseSchemaEditor:
         raise NotImplementedError
 
     def delete_model(self, ms: "ModelState", state: "ProjectState") -> None:
-        self.execute(f"DROP TABLE {ms.table}")
+        self.execute(f"DROP TABLE {self.qn(ms.table)}")
 
     def rename_table(self, old_table: str, new_table: str) -> None:
         raise NotImplementedError
@@ -180,7 +183,7 @@ class BaseSchemaEditor:
         raise NotImplementedError
 
     def alter_table_options(self, before: "ModelState", after: "ModelState") -> None:
-        """Engine / charset changes (MySQL only)."""
+        """Engine / charset changes (MySQL only; a no-op elsewhere)."""
 
     # ── introspection (used by --fake-initial) ───
 
@@ -200,4 +203,7 @@ def editor_for(db, **kwargs) -> BaseSchemaEditor:
     if name == "mysql":
         from .mysql import MySQLSchemaEditor
         return MySQLSchemaEditor(db, **kwargs)
+    if name == "postgresql":
+        from .postgresql import PostgreSQLSchemaEditor
+        return PostgreSQLSchemaEditor(db, **kwargs)
     raise MigrationError(f"Migrations are not supported for the {name!r} backend.")

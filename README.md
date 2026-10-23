@@ -4,7 +4,7 @@
     <strong>A lightweight, expressive, security-hardened Python ORM — inspired by Django, Spring Boot & ActiveRecord.</strong>
   </p>
   <p align="center">
-    <em>Python 3.9+ · Zero dependencies for SQLite · mysqlclient for MySQL · Works with Flask, FastAPI, or standalone</em>
+    <em>Python 3.9+ · Zero dependencies for SQLite · mysqlclient for MySQL · psycopg for PostgreSQL · Works with Flask, FastAPI, or standalone</em>
   </p>
 </p>
 
@@ -37,7 +37,7 @@
 | **Dynamic finders** — `findByEmail`, `findAllByActive`, `countBy…`, `existsBy…` | ✅ |
 | **Chainable, lazy QuerySet** with `Q` objects, result caching and slicing | ✅ |
 | **Django-compatible field set** (30+ fields) with validation | ✅ |
-| **SQLite + MySQL/MariaDB** behind a pluggable driver interface | ✅ |
+| **SQLite, MySQL/MariaDB and PostgreSQL** behind a pluggable driver interface | ✅ |
 | **Thread-safe & fork-safe** connections, **nested transactions** (SAVEPOINTs) | ✅ |
 | **Deadlock-retrying transactions** — `db.run_in_transaction(fn)` | ✅ |
 | **Django-style migrations** — autodetected, optimized, reversible, squashable | ✅ |
@@ -61,6 +61,9 @@ pip install "doveorm @ git+https://github.com/imaradesk/doveorm.git"
 # with MySQL / MariaDB support (adds mysqlclient)
 pip install "doveorm[mysql] @ git+https://github.com/imaradesk/doveorm.git"
 
+# with PostgreSQL support (adds psycopg 3)
+pip install "doveorm[postgres] @ git+https://github.com/imaradesk/doveorm.git"
+
 # pin a tag, branch or commit
 pip install "doveorm @ git+https://github.com/imaradesk/doveorm.git@v0.5.0"
 ```
@@ -69,6 +72,8 @@ In a `requirements.txt`:
 
 ```text
 doveorm[mysql] @ git+https://github.com/imaradesk/doveorm.git@v0.5.0
+# or
+doveorm[postgres] @ git+https://github.com/imaradesk/doveorm.git@v0.5.0
 ```
 
 From a local clone (`-e` for an editable install while you work on DoveORM itself):
@@ -79,7 +84,8 @@ pip install -e ./doveorm
 ```
 
 Installing gives you the `doveorm` package and the [`doveorm` command](#%EF%B8%8F-the-doveorm-command).
-SQLite needs nothing else. On Python 3.9/3.10 pip also installs `tomli`, which the command
+SQLite needs nothing else. PostgreSQL uses `psycopg` (version 3) and falls back to `psycopg2`
+if that is what you already have installed. On Python 3.9/3.10 pip also installs `tomli`, which the command
 uses to read its config file.
 
 ### Hello World — SQLite
@@ -127,6 +133,28 @@ Product.create_table()
 Product.create(name="Widget", price=9.99)
 ```
 
+### Hello World — PostgreSQL
+
+```python
+import os
+from doveorm import Model, configure, CharField, DecimalField
+
+configure(
+    DATABASE_ENGINE="postgresql",
+    DATABASE_NAME="myapp",
+    DATABASE_HOST="127.0.0.1",                     # or a socket dir: "/var/run/postgresql"
+    DATABASE_USER="app",
+    DATABASE_PASSWORD=os.environ["DB_PASSWORD"],
+)
+
+class Product(Model):
+    name  = CharField(max_length=200)
+    price = DecimalField(max_digits=10, decimal_places=2, default=0)
+
+Product.create_table()
+Product.create(name="Widget", price="9.99")
+```
+
 ---
 
 ## ⚙️ Configuration
@@ -138,6 +166,8 @@ data lives*:
 - SQLite needs an explicit `DATABASE_PATH` (pass `":memory:"` explicitly for a throw-away DB).
 - MySQL needs `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` (use `""` explicitly for
   passwordless auth) and `DATABASE_HOST` — or `DATABASE_OPTIONS={"unix_socket": ...}`.
+- PostgreSQL needs `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` (`""` must be
+  explicit) and `DATABASE_HOST` (a socket directory such as `/var/run/postgresql` works too).
 - Missing settings raise `ConfigurationError`; nothing silently falls back to `root` or an
   in-memory database, and `get_database()` raises until `configure()` has been called.
 - Unknown setting names (typos) raise `ConfigurationError` too.
@@ -152,7 +182,7 @@ from doveorm import configure
 
 # SQLite
 db = configure(
-    DATABASE_ENGINE="sqlite",      # "sqlite" (default) or "mysql"
+    DATABASE_ENGINE="sqlite",      # "sqlite" (default), "mysql" or "postgresql"
     DATABASE_PATH="app.db",        # file path or ":memory:"
     LOG_QUERIES=True,              # log every SQL statement (values redacted)
 )
@@ -166,6 +196,17 @@ db = configure(
     DATABASE_USER="app",
     DATABASE_PASSWORD=os.environ["DB_PASSWORD"],
     DATABASE_OPTIONS={"ssl_mode": "REQUIRED", "isolation_level": "READ COMMITTED"},
+)
+
+# PostgreSQL
+db = configure(
+    DATABASE_ENGINE="postgresql",  # "postgres" and Django's "django.db.backends.postgresql" work too
+    DATABASE_NAME="myapp",
+    DATABASE_HOST="127.0.0.1",
+    DATABASE_PORT=5432,            # optional: 5432 is the default
+    DATABASE_USER="app",
+    DATABASE_PASSWORD=os.environ["DB_PASSWORD"],
+    DATABASE_OPTIONS={"sslmode": "require", "schema": "app", "statement_timeout": 30},
 )
 ```
 
@@ -185,6 +226,9 @@ configure(DATABASES={
         "PASSWORD": os.environ["DB_PASSWORD"],
     }
 })
+
+# PostgreSQL works the same way:
+#   "ENGINE": "postgresql"  (or "django.db.backends.postgresql"), "PORT": 5432
 ```
 
 ### 3. Environment variables
@@ -196,6 +240,7 @@ export DOVEORM_DATABASE_HOST=127.0.0.1
 export DOVEORM_DATABASE_USER=app
 export DOVEORM_DATABASE_PASSWORD='...'                    # from your secret store
 export DOVEORM_DATABASE_OPTIONS='{"ssl_mode": "REQUIRED"}' # dict settings are JSON
+# PostgreSQL: DOVEORM_DATABASE_ENGINE=postgresql, DOVEORM_DATABASE_OPTIONS='{"sslmode": "require"}'
 ```
 
 ```python
@@ -239,14 +284,14 @@ User.create_table()
 
 | Setting | Default | Description |
 |---|---|---|
-| `DATABASE_ENGINE` | `"sqlite"` | `"sqlite"` or `"mysql"` |
+| `DATABASE_ENGINE` | `"sqlite"` | `"sqlite"`, `"mysql"` or `"postgresql"` |
 | `DATABASE_PATH` | **required (SQLite)** | SQLite file path, or `":memory:"` |
-| `DATABASE_NAME` | **required (MySQL)** | Database name (MySQL) / alias for the path (SQLite) |
-| `DATABASE_HOST` | **required (MySQL)** | MySQL host — unless `DATABASE_OPTIONS["unix_socket"]` |
-| `DATABASE_PORT` | `3306` | MySQL port |
-| `DATABASE_USER` | **required (MySQL)** | MySQL user |
-| `DATABASE_PASSWORD` | **required (MySQL)** | MySQL password (`""` must be explicit) |
-| `DATABASE_CHARSET` | `"utf8mb4"` | MySQL charset |
+| `DATABASE_NAME` | **required (MySQL / PostgreSQL)** | Database name / alias for the path (SQLite) |
+| `DATABASE_HOST` | **required (MySQL / PostgreSQL)** | Server host. MySQL: or `DATABASE_OPTIONS["unix_socket"]`; PostgreSQL: or a socket directory |
+| `DATABASE_PORT` | engine default | `3306` for MySQL, `5432` for PostgreSQL |
+| `DATABASE_USER` | **required (MySQL / PostgreSQL)** | Database user |
+| `DATABASE_PASSWORD` | **required (MySQL / PostgreSQL)** | Password (`""` must be explicit) |
+| `DATABASE_CHARSET` | `"utf8mb4"` | MySQL charset (PostgreSQL always uses UTF8) |
 | `DATABASE_OPTIONS` | `{}` | Extra driver options — see [Drivers](#-drivers) |
 | `LOG_QUERIES` | `False` | Log every SQL statement to the `doveorm` logger |
 | `LOG_QUERY_PARAMS` | `False` | Also log bound values (may expose secrets / PII) |
@@ -351,6 +396,11 @@ print(ticket.id)  # UUID('a1b2c3d4-...')
 ### Naming rules (enforced)
 
 - Table, column, index and join-table names must be plain identifiers (`[A-Za-z_][A-Za-z0-9_]*`, ≤ 64 chars).
+- Reserved words (`order`, `user`, `group`, `limit`, …) and mixed-case names (`firstName`) work
+  as table and column names on every backend: DoveORM quotes a name only when it has to
+  (`"order"`, or `` `order` `` on MySQL), so ordinary names produce plain, unquoted SQL.
+  On PostgreSQL a mixed-case name is case-sensitive, as it is in Django. Keep names to 63
+  characters there; PostgreSQL truncates longer ones.
 - Field names may not start with `_` and may not shadow the Model API (`save`, `delete`, `where`, `to_dict`, …).
 - A model may declare at most one primary key.
 
@@ -360,53 +410,61 @@ print(ticket.id)  # UUID('a1b2c3d4-...')
 
 ### Auto-increment primary keys
 
-| Field | SQLite | MySQL |
-|---|---|---|
-| `AutoField()` | `INTEGER PRIMARY KEY AUTOINCREMENT` | `INT PRIMARY KEY AUTO_INCREMENT` |
-| `BigAutoField()` | `INTEGER PRIMARY KEY AUTOINCREMENT` | `BIGINT PRIMARY KEY AUTO_INCREMENT` |
-| `SmallAutoField()` | `INTEGER PRIMARY KEY AUTOINCREMENT` | `SMALLINT PRIMARY KEY AUTO_INCREMENT` |
+| Field | SQLite | MySQL | PostgreSQL |
+|---|---|---|---|
+| `AutoField()` | `INTEGER PRIMARY KEY AUTOINCREMENT` | `INT PRIMARY KEY AUTO_INCREMENT` | `INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY` |
+| `BigAutoField()` | `INTEGER PRIMARY KEY AUTOINCREMENT` | `BIGINT PRIMARY KEY AUTO_INCREMENT` | `BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY` |
+| `SmallAutoField()` | `INTEGER PRIMARY KEY AUTOINCREMENT` | `SMALLINT PRIMARY KEY AUTO_INCREMENT` | `SMALLINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY` |
 
-An explicit value (`User(id=99)`) is inserted as given.
+An explicit value (`User(id=99)`) is inserted as given, and the next generated key continues
+after it on every backend: PostgreSQL's identity sequence is moved forward automatically
+(never backwards). Rows inserted with raw SQL bypass this; after a raw bulk import on
+PostgreSQL, run
+`SELECT setval(pg_get_serial_sequence('users', 'id'), (SELECT MAX(id) FROM users));`
 
 ### Numeric fields
 
-| Field | SQLite | MySQL | Validation |
-|---|---|---|---|
-| `IntegerField()` | `INTEGER` | `INT` | 32-bit range; `bool` rejected |
-| `BigIntegerField()` | `INTEGER` | `BIGINT` | 64-bit range |
-| `SmallIntegerField()` | `INTEGER` | `SMALLINT` | 16-bit range |
-| `PositiveIntegerField()` / `PositiveSmallIntegerField()` / `PositiveBigIntegerField()` | `INTEGER` | `INT` / `SMALLINT` / `BIGINT` | ≥ 0 |
-| `FloatField()` | `REAL` | `DOUBLE` | finite numbers only |
-| `DecimalField(max_digits=10, decimal_places=2)` | `TEXT` | `DECIMAL(m,d)` | digits & places enforced |
+| Field | SQLite | MySQL | PostgreSQL | Validation |
+|---|---|---|---|---|
+| `IntegerField()` | `INTEGER` | `INT` | `INTEGER` | 32-bit range; `bool` rejected |
+| `BigIntegerField()` | `INTEGER` | `BIGINT` | `BIGINT` | 64-bit range |
+| `SmallIntegerField()` | `INTEGER` | `SMALLINT` | `SMALLINT` | 16-bit range |
+| `PositiveIntegerField()` / `PositiveSmallIntegerField()` / `PositiveBigIntegerField()` | `INTEGER` | `INT` / `SMALLINT` / `BIGINT` | `INTEGER` / `SMALLINT` / `BIGINT` | ≥ 0 |
+| `FloatField()` | `REAL` | `DOUBLE` | `DOUBLE PRECISION` | finite numbers only |
+| `DecimalField(max_digits=10, decimal_places=2)` | `TEXT` | `DECIMAL(m,d)` | `NUMERIC(m,d)` | digits & places enforced |
 
 `DecimalField` values are stored exactly; on SQLite, range lookups and ordering compare numerically.
 
 ### String / text fields
 
-| Field | SQLite | MySQL | Validation |
+| Field | SQLite | MySQL / PostgreSQL | Validation |
 |---|---|---|---|
 | `CharField(max_length=255)` | `TEXT` | `VARCHAR(n)` | `str`, length |
-| `TextField()` | `TEXT` | `LONGTEXT` | `str` |
+| `TextField()` | `TEXT` | `LONGTEXT` / `TEXT` | `str` |
 | `SlugField(max_length=50)` | `TEXT` | `VARCHAR(n)` | `[-a-zA-Z0-9_]+`, indexed |
 | `EmailField(max_length=254)` | `TEXT` | `VARCHAR(n)` | email format |
 | `URLField(max_length=200)` | `TEXT` | `VARCHAR(n)` | `http(s)://` URL |
 | `IPAddressField()` | `TEXT` | `VARCHAR(15)` | IPv4 |
 | `GenericIPAddressField(protocol="both")` | `TEXT` | `VARCHAR(45)` | IPv4 / IPv6 |
 
+`contains` / `startswith` / `endswith` follow each database's own `LIKE`, as in Django:
+case-sensitive on PostgreSQL, case-insensitive for ASCII on SQLite, collation-dependent on
+MySQL. Use the `i…` variants (`icontains`, …) for case-insensitive matching on every backend.
+
 ### Boolean field
 
-| Field | SQLite | MySQL | Notes |
-|---|---|---|---|
-| `BooleanField(default=True)` | `INTEGER` (0/1) | `TINYINT(1)` | Accepts `bool` (or `0`/`1`); strings are rejected |
+| Field | SQLite | MySQL | PostgreSQL | Notes |
+|---|---|---|---|---|
+| `BooleanField(default=True)` | `INTEGER` (0/1) | `TINYINT(1)` | `SMALLINT` (0/1) | Accepts `bool` (or `0`/`1`); strings are rejected |
 
 ### Date / time fields
 
-| Field | SQLite | MySQL | Notes |
-|---|---|---|---|
-| `DateField()` | `TEXT` | `DATE` | `datetime.date` |
-| `DateTimeField(use_tz=None)` | `TEXT` | `DATETIME(6)` | microseconds kept; aware values stored as UTC |
-| `TimeField()` | `TEXT` | `TIME(6)` | `datetime.time` |
-| `DurationField()` | `INTEGER` | `BIGINT` | `datetime.timedelta`, exact microseconds |
+| Field | SQLite | MySQL | PostgreSQL | Notes |
+|---|---|---|---|---|
+| `DateField()` | `TEXT` | `DATE` | `DATE` | `datetime.date` |
+| `DateTimeField(use_tz=None)` | `TEXT` | `DATETIME(6)` | `TIMESTAMP` | microseconds kept; aware values stored as UTC |
+| `TimeField()` | `TEXT` | `TIME(6)` | `TIME` | `datetime.time` |
+| `DurationField()` | `INTEGER` | `BIGINT` | `BIGINT` | `datetime.timedelta`, exact microseconds |
 
 `DateField`, `DateTimeField` and `TimeField` support `auto_now=True` (set on every save) and
 `auto_now_add=True` (set on insert when empty). With `use_tz=True` (or `USE_TZ=True`),
@@ -414,15 +472,15 @@ An explicit value (`User(id=99)`) is inserted as given.
 
 ### UUID, JSON and binary fields
 
-| Field | SQLite | MySQL | Notes |
-|---|---|---|---|
-| `UUIDField(default=uuid.uuid4)` | `TEXT` | `CHAR(32)` | Stored as 32-char hex; returns `uuid.UUID` |
-| `JSONField(default=dict)` | `TEXT` | `JSON` | Any JSON-serialisable value; mutable defaults are copied per instance |
-| `BinaryField(max_length=None)` | `BLOB` | `LONGBLOB` | `bytes` |
+| Field | SQLite | MySQL | PostgreSQL | Notes |
+|---|---|---|---|---|
+| `UUIDField(default=uuid.uuid4)` | `TEXT` | `CHAR(32)` | `UUID` | Stored as 32-char hex (native `UUID` on PostgreSQL); returns `uuid.UUID` |
+| `JSONField(default=dict)` | `TEXT` | `JSON` | `JSONB` | Any JSON-serialisable value; mutable defaults are copied per instance |
+| `BinaryField(max_length=None)` | `BLOB` | `LONGBLOB` | `BYTEA` | `bytes` |
 
 ### File / path fields
 
-| Field | SQLite | MySQL | Validation |
+| Field | SQLite | MySQL / PostgreSQL | Validation |
 |---|---|---|---|
 | `FileField(upload_to="uploads/")` | `TEXT` | `VARCHAR(255)` | no NUL bytes, no `..` segments |
 | `ImageField(upload_to="avatars/", width_field=…, height_field=…)` | `TEXT` | `VARCHAR(255)` | as `FileField` |
@@ -499,11 +557,11 @@ Slicing works too: `User.all().order_by("id")[10:20]`.
 
 ```python
 User.where(age=25)                    # age = 25          (also age__eq / age__exact)
-User.where(age__ne=25)                # age != 25
+User.where(age__ne=25)                # age != 25, or age IS NULL (NULL is "not 25")
 User.where(age__lt=30)                # also lte, gt, gte
 User.where(age__range=(18, 30))       # BETWEEN 18 AND 30
 User.where(id__in=[1, 2, 3])          # IN (...)   — an empty list matches nothing
-User.where(id__not_in=[4, 5])         # NOT IN (...)
+User.where(id__not_in=[4, 5])         # NOT IN (...), plus NULL rows unless None is listed
 User.where(email__is_null=True)       # IS NULL    (also isnull; value must be a bool)
 User.where(email=None)                # IS NULL
 User.where(name__contains="itu")      # LIKE '%itu%'  — wildcards in the value are escaped
@@ -516,6 +574,24 @@ User.where(name__like="T%s")          # raw LIKE pattern (you control the wildca
 Unknown fields or lookups (e.g. `age__gtee=18`) raise `ValueError` instead of silently
 matching the wrong rows. `contains` / `startswith` / `endswith` follow the backend's
 collation for case sensitivity; the `i*` variants are always case-insensitive.
+
+The same query returns the same rows on SQLite, MySQL and PostgreSQL, following Django's rules:
+
+- **Lookup values are checked by the field** (`Field.get_prep_value()`, as in Django). A
+  value the column cannot hold raises `ValidationError` instead of matching the wrong rows:
+  `where(active="false")`, `where(age="abc")` and `where(token="not-a-uuid")` all raise.
+  Values that clearly mean one thing are converted: `age="30"`, `age=30.0`, and for
+  booleans Django's `"t"/"True"/"1"` and `"f"/"False"/"0"`.
+- **NULL rows are kept by negation**: `exclude(name="x")`, `~Q(name="x")`, `name__ne="x"` and
+  `name__not_in=[...]` also return rows whose `name` is NULL, because NULL is not `"x"`.
+  (Plain SQL `NOT (name = 'x')` silently drops them.)
+- **Decimals are compared exactly**: `price__gt="2.499"` is not rounded to the column's
+  scale first.
+- **JSON** `exact` lookups ignore key order (`{"a": 1, "b": 2} == {"b": 2, "a": 1}`).
+- **Text lookups on other column types** work everywhere: `age__contains=3`,
+  `token__icontains="abcdef"` (UUIDs are matched in their 32-character hex form).
+- Text containing NUL (`\x00`) is rejected: PostgreSQL cannot store it, and C programs
+  reading the data would cut the value short at it.
 
 ### Q objects — OR / AND / NOT
 
@@ -592,8 +668,8 @@ rows = get_database().raw(
 )
 ```
 
-Write `?` placeholders on every backend — they are translated for MySQL (`?` inside string
-literals is left alone).
+Write `?` placeholders on every backend — they are translated for MySQL and PostgreSQL (`?`
+inside string literals is left alone).
 
 ---
 
@@ -791,8 +867,9 @@ def transfer():
 db.run_in_transaction(transfer, retries=3)
 ```
 
-MySQL deadlocks (1213), lock-wait timeouts (1205) and SQLite "database is locked" errors roll
-back and re-run the function with exponential backoff. The function may run more than once,
+MySQL deadlocks (1213), lock-wait timeouts (1205), PostgreSQL serialization failures (40001),
+deadlocks (40P01) and lock-not-available errors (55P03), and SQLite "database is locked" errors
+roll back and re-run the function with exponential backoff. The function may run more than once,
 so keep side effects outside the database out of it.
 
 `db.disconnect()` refuses to run while a transaction is open (`force=True` overrides).
@@ -916,10 +993,11 @@ operations = [
 
 | | |
 |---|---|
-| **Atomic (SQLite)** | each migration and its history row commit together; a failure leaves nothing behind |
+| **Atomic (SQLite, PostgreSQL)** | each migration and its history row commit together; a failure leaves nothing behind |
 | **Table rebuilds (SQLite)** | changes SQLite can't `ALTER` use the documented copy-and-swap rebuild, with foreign-key enforcement suspended so `ON DELETE CASCADE` can't fire, then `PRAGMA foreign_key_check` before commit |
 | **MySQL** | DDL commits implicitly, so a migration is not atomic there: keep one logical change per migration. The history row is only written on success. FK/unique names are looked up in `information_schema`, so tables created by `create_table()` migrate too. Changing a PK's type also updates the FK columns that point to it |
-| **Concurrent deploys** | MySQL takes a named lock (`GET_LOCK`); on SQLite the UNIQUE history row stops double-application |
+| **PostgreSQL** | DDL is transactional, so a failed migration rolls back completely. Columns are changed with `ALTER COLUMN … TYPE … USING`, `SET/DROP NOT NULL` and `SET/DROP DEFAULT`. Index, unique and FK names are looked up in the system catalogs, so tables created by `create_table()` (`<table>_<col>_key`, `<table>_<col>_fkey`) migrate too. Changing a PK's type also updates the FK columns that point to it |
+| **Concurrent deploys** | MySQL takes a named lock (`GET_LOCK`), PostgreSQL an advisory lock (`pg_try_advisory_lock`); on SQLite the UNIQUE history row stops double-application |
 | **Irreversible steps** | rolling back a migration with `RunSQL`/`RunPython` that has no reverse is refused before anything runs |
 | **Consistency** | an applied migration whose dependency is not applied, a dependency cycle, or two "latest" migrations (join them with `doveorm merge`) all stop `doveorm apply` |
 | **Existing databases** | `doveorm apply --adopt` records an initial migration without running it when all its tables and columns already exist |
@@ -1016,7 +1094,7 @@ or after the command name.
 | `doveorm doctor` | health checks; exit 1 on a failure (`--strict`: also on warnings) |
 | `doveorm models` | each model, its table, field count and whether the table matches |
 | `doveorm console` | Python shell with `doveorm`, `db` and every model loaded (IPython if installed; `--plain`) |
-| `doveorm connect` | open the database's own client (`sqlite3` / `mysql`) with the configured credentials |
+| `doveorm connect` | open the database's own client (`sqlite3` / `mysql` / `psql`) with the configured credentials |
 
 `-v` / `--verbose` also logs the SQL each migration runs; `doveorm --version` prints the
 version; `doveorm COMMAND --help` lists every option.
@@ -1066,6 +1144,8 @@ $ doveorm doctor
 - **SQLite:** `PRAGMA quick_check`, dangling foreign keys, WAL journal mode, and database
   file permissions.
 - **MySQL:** strict `sql_mode`, `utf8mb4` charset, and TLS on non-local connections.
+- **PostgreSQL:** `UTF8` server encoding, `standard_conforming_strings = on`, and TLS on
+  non-local connections.
 - **Settings:** warns when `LOG_QUERY_PARAMS` is on.
 
 `status`, `doctor`, `models` and `verify` only read; they never change data or schema.
@@ -1094,9 +1174,9 @@ main(["apply"])                  # same as `doveorm apply`; returns the exit cod
 
 > **Security:** the command imports the `settings` and `models` modules you list, just like
 > starting your app does, so only run it in projects you trust. `status` and `doctor` never
-> print the password. `connect` passes the MySQL password through a private temporary option
-> file (mode 0600, deleted afterwards), never on the command line where other users could see
-> it in the process list.
+> print the password. `connect` passes the MySQL / PostgreSQL password through a private
+> temporary option file / `PGPASSFILE` (mode 0600, deleted afterwards), never on the command
+> line where other users could see it in the process list.
 
 ---
 
@@ -1108,8 +1188,9 @@ DoveORM talks to the database through a pluggable `DatabaseDriver` interface.
 |---|---|---|---|
 | `SQLiteDriver` | SQLite 3 | `sqlite3` (stdlib) | built-in |
 | `MySQLDriver` | MySQL 5.7+ / MariaDB | `mysqlclient` | `pip install "doveorm[mysql]"` |
+| `PostgreSQLDriver` | PostgreSQL 10+ | `psycopg` 3 (or `psycopg2`) | `pip install "doveorm[postgres]"` |
 
-Both drivers use one connection per thread, nested transactions via SAVEPOINTs, and are
+All drivers use one connection per thread, nested transactions via SAVEPOINTs, and are
 **fork-safe**: a child process never reuses its parent's connection.
 
 ### SQLite
@@ -1156,6 +1237,46 @@ db = MySQLDatabase(
 - Logs a warning for remote connections without TLS and for empty passwords.
 - `InnoDB` / `utf8mb4` tables by default.
 
+### PostgreSQL
+
+```python
+import os
+from doveorm import PostgreSQLDatabase
+
+db = PostgreSQLDatabase(
+    host="db.internal", user="app", password=os.environ["DB_PASSWORD"], database="myapp",
+    port=5432,
+    sslmode="require",                 # passed through to psycopg (sslrootcert=, … too)
+    schema="app",                      # session search_path (validated identifier)
+    isolation_level="READ COMMITTED",  # validated against the 4 SQL levels
+    statement_timeout=30,              # server-side limit (seconds) → QueryTimeout
+    max_lifetime=3600,                 # recycle connections hourly
+    library=None,                      # "psycopg" | "psycopg2"; default: whichever is installed
+    server_side_binding=False,         # psycopg 3 only; see below
+    connect_timeout=10,
+)
+```
+
+- Autocommit outside transactions, so reads always see committed data; `transaction()`
+  issues `BEGIN`/`COMMIT` and nests with SAVEPOINTs.
+- DDL is transactional: `create_table()` and migrations roll back cleanly on failure.
+- New primary keys come back through `INSERT … RETURNING`; `ManyToMany.add()` uses
+  `ON CONFLICT DO NOTHING`.
+- A connection that was closed by the server is replaced before the next statement, and a
+  read that loses its connection is retried once outside a transaction. Writes are never
+  retried, because the server may already have applied them.
+- Serialization failures, deadlocks and lock-not-available errors are retried by
+  `run_in_transaction()`. Use `isolation_level="SERIALIZABLE"` together with it for
+  conflict-free read-modify-write logic.
+- Parameters are bound client-side by default, as in Django: no server-side prepared
+  statements, so it works behind PgBouncer in transaction-pooling mode, and psycopg 3 and
+  psycopg2 behave the same. `server_side_binding=True` (psycopg 3) opts in to server-side
+  binding.
+- Sessions run in UTC (`SET TIME ZONE 'UTC'`), matching how DoveORM stores datetimes.
+- An explicit key on an auto-increment column moves the identity sequence forward, so the
+  next generated key cannot collide with it.
+- Logs a warning for remote connections without `sslmode` and for empty passwords.
+
 ### Writing a custom driver
 
 Subclass `DatabaseDriver` and implement the primitive hooks; connection handling,
@@ -1165,8 +1286,8 @@ transactions, retries and fork safety are inherited:
 from doveorm import Database
 from doveorm.drivers.base import DatabaseDriver
 
-class PostgreSQLDriver(DatabaseDriver):
-    name = "postgresql"
+class MyDriver(DatabaseDriver):
+    name = "mydb"
     placeholder = "%s"
 
     def _open(self): ...                          # return a new DB-API connection
@@ -1181,8 +1302,12 @@ class PostgreSQLDriver(DatabaseDriver):
     def table_exists(self, table_name): ...
     def index_exists(self, table_name, index): ...
 
-db = Database(driver=PostgreSQLDriver(...))
+db = Database(driver=MyDriver(...))
 ```
+
+Dialect differences (types, auto-increment, `RETURNING`, insert-ignore, identifier quoting
+via `quote_name()`, text casts for lookups via `lookup_cast()`) are hooks on the driver too — see `doveorm/drivers/postgresql.py` for a complete example. Migrations also need a
+schema editor for the backend (`doveorm/migrations/backends/`).
 
 ---
 
@@ -1196,10 +1321,10 @@ DoveORM is hardened by default:
 | Destructive queries | Unfiltered bulk `update()` / `delete()` require `Model.all()`; bulk writes with `limit()` are refused |
 | Mass assignment | `from_input()` / `assign()` only set editable, whitelisted fields |
 | Data exposure | `sensitive=True` fields are excluded from `to_dict()` and redacted in errors; query logging redacts parameters by default |
-| Credentials | No default users or passwords; drivers and databases cannot be pickled or copied; `repr()` never shows passwords; TLS warning for remote MySQL |
-| Data integrity | Strict MySQL `sql_mode`, typed field validation, optimistic locking, atomic migrations |
+| Credentials | No default users or passwords; drivers and databases cannot be pickled or copied; `repr()` never shows passwords; TLS warning for remote MySQL / PostgreSQL |
+| Data integrity | Strict MySQL `sql_mode`, typed field validation (including lookup values), NUL characters rejected in text, optimistic locking, atomic migrations |
 | Files | SQLite files created `0600`; `FileField` rejects `..` and NUL; `FilePathField` confines paths |
-| Runtime | Fork-safe connections, connection recycling, SQLite statement timeouts |
+| Runtime | Fork-safe connections, connection recycling, SQLite and PostgreSQL statement timeouts |
 
 ### Exceptions
 
@@ -1285,7 +1410,7 @@ doveorm/
 │   ├── optimizer.py       # merges redundant operations
 │   ├── questioner.py      # renames / NOT NULL backfills (interactive or explicit)
 │   ├── operations/        # CreateModel, AddField, AlterField, RunSQL, RunPython, …
-│   ├── backends/          # schema editors: SQLite (table rebuilds), MySQL
+│   ├── backends/          # schema editors: SQLite (table rebuilds), MySQL, PostgreSQL
 │   ├── loader.py          # reads migration files (new + legacy style)
 │   ├── graph.py           # dependency graph
 │   ├── executor.py        # plans and runs migrations
@@ -1301,7 +1426,8 @@ doveorm/
 │   ├── base.py            # DatabaseDriver interface + SQL dialect helpers
 │   ├── connection.py      # per-thread connections, transactions, retries, fork safety
 │   ├── sqlite.py          # SQLite driver (stdlib)
-│   └── mysql.py           # MySQL / MariaDB driver (mysqlclient)
+│   ├── mysql.py           # MySQL / MariaDB driver (mysqlclient)
+│   └── postgresql.py      # PostgreSQL driver (psycopg 3 / psycopg2)
 ├── fields/
 │   ├── base.py            # Field
 │   ├── numeric.py         # integers, auto keys, float, decimal
@@ -1342,6 +1468,21 @@ python3 -m pytest tests/
 
 The suite covers SQLite end-to-end and the MySQL driver against a recording fake of
 `MySQLdb` (`tests/fakes.py`), so no database server is needed.
+
+`tests/test_accuracy.py` checks that queries return the same rows on every backend (NULLs
+under negation, lookup-value validation, reserved and mixed-case names, decimal, JSON and
+UUID lookups, explicit keys). It runs on SQLite, checks the SQL MySQL would receive, and
+also runs on PostgreSQL when a server is configured.
+
+PostgreSQL's driver, configuration and migration SQL are unit-tested without a server. To also
+run the PostgreSQL integration tests (CRUD on every field type, transactions, retries,
+timeouts, reconnects and full migrate/rollback cycles, for `psycopg` 3, `psycopg2`, and
+`psycopg` 3 with server-side binding), point them at a database the tests may create schemas in:
+
+```bash
+DOVEORM_TEST_PG_HOST=127.0.0.1 DOVEORM_TEST_PG_USER=app DOVEORM_TEST_PG_PASSWORD=secret \
+DOVEORM_TEST_PG_NAME=doveorm_test python3 -m pytest tests/test_postgresql.py tests/test_accuracy.py
+```
 
 ---
 

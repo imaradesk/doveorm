@@ -10,17 +10,18 @@ from __future__ import annotations
 from typing import Any
 
 DEFAULTS: dict[str, Any] = {
-    # -- database engine: "sqlite" | "mysql"
+    # -- database engine: "sqlite" | "mysql" | "postgresql"
     "DATABASE_ENGINE": "sqlite",
     # -- SQLite: file path, or ":memory:" for an explicit temporary database
     "DATABASE_PATH": None,
-    # -- MySQL (required: NAME, USER, PASSWORD; HOST unless OPTIONS["unix_socket"])
+    # -- MySQL / PostgreSQL (required: NAME, USER, PASSWORD, HOST;
+    #    MySQL also accepts OPTIONS["unix_socket"] instead of HOST)
     "DATABASE_NAME": None,
     "DATABASE_HOST": None,
-    "DATABASE_PORT": 3306,        # MySQL protocol default
+    "DATABASE_PORT": None,        # None → engine default (MySQL 3306, PostgreSQL 5432)
     "DATABASE_USER": None,
     "DATABASE_PASSWORD": None,    # use "" explicitly for passwordless auth
-    "DATABASE_CHARSET": "utf8mb4",
+    "DATABASE_CHARSET": "utf8mb4", # MySQL only (PostgreSQL always uses UTF8)
     "DATABASE_OPTIONS": {},       # extra kwargs forwarded to the driver
     # -- ORM behaviour
     "LOG_QUERIES": False,

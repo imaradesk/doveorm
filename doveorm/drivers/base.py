@@ -10,8 +10,24 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Iterable, Sequence
 
-from ..utils.sql import first_keyword, index_name, split_statements, translate_qmark, validate_identifier
+from ..utils.sql import (first_keyword, index_name, quote_name, split_statements, translate_qmark,
+                         validate_identifier)
 from .connection import ConnectionManagerMixin
+
+
+class _DictRow(dict):
+    """Dict-like row so row["col"], row[0] and row.keys() all work."""
+
+    __slots__ = ("_values",)
+
+    def __init__(self, keys: list[str], values: tuple):
+        super().__init__(zip(keys, values))
+        self._values = values
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._values[key]
+        return super().__getitem__(key)
 
 
 class DatabaseDriver(ConnectionManagerMixin, ABC):
@@ -19,11 +35,13 @@ class DatabaseDriver(ConnectionManagerMixin, ABC):
 
     # ── dialect identifiers ──────────────────────
 
-    name: str = "base"            # "sqlite" | "mysql"
+    name: str = "base"            # "sqlite" | "mysql" | "postgresql"
     placeholder: str = "?"        # native parameter placeholder
     autoincrement_sql: str = "AUTOINCREMENT"  # keyword after PRIMARY KEY
     backslash_escapes: bool = False           # backslash escapes inside string literals
     supports_transactional_ddl: bool = True
+    identifier_quote: str = '"'               # quote character for names that need quoting
+    preserve_identifier_case: bool = False    # True when bare names are case-folded (PostgreSQL)
 
 
     # ── backend hooks (implemented by subclasses) ──
@@ -121,6 +139,34 @@ class DatabaseDriver(ConnectionManagerMixin, ABC):
 
     # ── SQL dialect helpers ──────────────────────
 
+    def quote_name(self, name: str) -> str:
+        """Render a validated identifier, quoting it only when it must be quoted.
+
+        Reserved words (``order``, ``user`` …) are quoted, and on
+        PostgreSQL so are names with upper-case letters.  Plain names stay
+        bare, so ordinary schemas produce unchanged SQL.
+        """
+        return quote_name(name, self.identifier_quote, preserve_case=self.preserve_identifier_case)
+
+    def lookup_cast(self, column_sql: str, field, lookup: str) -> str:
+        """Column expression for a text lookup (``iexact``, ``contains`` …).
+
+        Backends whose ``LIKE`` / ``LOWER`` only work on text (PostgreSQL)
+        cast other column types to text here.
+        """
+        return column_sql
+
+    def json_param(self, placeholder: str = "?") -> str:
+        """Parameter expression for comparing a JSON column (MySQL: ``CAST(? AS JSON)``)."""
+        return placeholder
+
+    def sync_auto_increment(self, table: str, pk: str, value) -> None:
+        """Called after a row was inserted with an explicit auto-increment key.
+
+        Backends whose sequences do not follow explicit keys (PostgreSQL)
+        move the sequence forward so later generated keys cannot collide.
+        """
+
     def adapt_sql(self, sql: str) -> str:
         """Rewrite ``?`` placeholders if the driver uses something else.
 
@@ -168,6 +214,18 @@ class DatabaseDriver(ConnectionManagerMixin, ABC):
         """Return the INSERT variant that silently ignores duplicate keys."""
         return "INSERT OR IGNORE"
 
+    def insert_ignore_suffix(self) -> str:
+        """Clause appended to an ignoring INSERT (PostgreSQL: ON CONFLICT DO NOTHING)."""
+        return ""
+
+    def returning_sql(self, pk: str) -> str:
+        """Clause that makes an INSERT return the new primary key, or "".
+
+        Backends without ``cursor.lastrowid`` support (PostgreSQL) return the
+        key with ``RETURNING`` instead.
+        """
+        return ""
+
     def foreign_key_pragma(self) -> str | None:
         """Return a statement to enable FK enforcement, or None."""
         return None
@@ -183,7 +241,9 @@ class DatabaseDriver(ConnectionManagerMixin, ABC):
         validate_identifier(name, "index name")
         if not self.index_exists(table, name):
             kind = "UNIQUE INDEX" if unique else "INDEX"
-            self._execute_statement(f"CREATE {kind} {name} ON {table} ({', '.join(columns)})")
+            qn = self.quote_name
+            self._execute_statement(
+                f"CREATE {kind} {qn(name)} ON {qn(table)} ({', '.join(qn(c) for c in columns)})")
         return name
 
     @staticmethod

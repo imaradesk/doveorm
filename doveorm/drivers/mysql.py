@@ -50,7 +50,7 @@ from typing import Iterable, Sequence
 
 from ..exceptions import ConfigurationError
 from ..utils.sql import validate_identifier
-from .base import DatabaseDriver
+from .base import DatabaseDriver, _DictRow
 
 log = logging.getLogger("doveorm")
 
@@ -77,27 +77,13 @@ _NO_DEFAULT_TYPES = (
 )
 
 
-class _DictRow(dict):
-    """Dict-like row so row["col"], row[0] and row.keys() all work."""
-
-    __slots__ = ("_values",)
-
-    def __init__(self, keys: list[str], values: tuple):
-        super().__init__(zip(keys, values))
-        self._values = values
-
-    def __getitem__(self, key):
-        if isinstance(key, int):
-            return self._values[key]
-        return super().__getitem__(key)
-
-
 class MySQLDriver(DatabaseDriver):
     name = "mysql"
     placeholder = "%s"
     autoincrement_sql = "AUTO_INCREMENT"
     backslash_escapes = True
     supports_transactional_ddl = False
+    identifier_quote = "`"
     max_limit = "18446744073709551615"
 
     def __init__(
@@ -343,6 +329,10 @@ class MySQLDriver(DatabaseDriver):
 
     def insert_ignore_prefix(self) -> str:
         return "INSERT IGNORE"
+
+    def json_param(self, placeholder: str = "?") -> str:
+        # A JSON column compared with a plain string is never equal.
+        return f"CAST({placeholder} AS JSON)"
 
     def foreign_key_pragma(self) -> str | None:
         return None  # MySQL enforces FKs by default with InnoDB

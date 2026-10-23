@@ -14,6 +14,7 @@ Performance notes
 from __future__ import annotations
 
 import logging
+import time
 from contextlib import contextmanager
 
 from ..exceptions import MigrationError
@@ -260,6 +261,10 @@ class MigrationExecutor:
 
     @contextmanager
     def _lock(self):
+        if self.db.driver.name == "postgresql":
+            with self._pg_lock():
+                yield
+            return
         if self.db.driver.name != "mysql":
             yield            # SQLite: the UNIQUE history row + per-migration transaction guard
             return
@@ -272,3 +277,21 @@ class MigrationExecutor:
             yield
         finally:
             self.db.execute("SELECT RELEASE_LOCK(?)", [_LOCK_NAME])
+
+    @contextmanager
+    def _pg_lock(self):
+        """Session-level advisory lock, polled until ``lock_timeout``."""
+        deadline = time.monotonic() + self.lock_timeout
+        while True:
+            got = self.db.execute("SELECT pg_try_advisory_lock(hashtext(?))", [_LOCK_NAME])
+            if got and got[0][0]:
+                break
+            if time.monotonic() >= deadline:
+                raise MigrationError(
+                    f"Another process is running migrations (waited {self.lock_timeout}s)."
+                )
+            time.sleep(0.5)
+        try:
+            yield
+        finally:
+            self.db.execute("SELECT pg_advisory_unlock(hashtext(?))", [_LOCK_NAME])

@@ -9,7 +9,8 @@ from .base import Field
 
 
 class BooleanField(Field):
-    """Boolean.  SQLite: ``INTEGER`` (0/1), MySQL: ``TINYINT(1)``."""
+    """Boolean.  SQLite: ``INTEGER`` (0/1), MySQL: ``TINYINT(1)``,
+    PostgreSQL: ``SMALLINT`` (0/1)."""
     def sql_type(self): return "BOOLEAN"
 
     def validate(self, value):
@@ -31,6 +32,23 @@ class BooleanField(Field):
         if value is None: return None
         return 1 if value else 0
 
+    _TRUE = ("t", "True", "1")      # the strings Django's BooleanField accepts
+    _FALSE = ("f", "False", "0")
+
+    def get_prep_value(self, value):
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int) and value in (0, 1):
+            return value
+        if isinstance(value, str):
+            if value in self._TRUE:
+                return 1
+            if value in self._FALSE:
+                return 0
+        raise self._prep_error(value, "True or False")
+
     def from_db(self, value):
         if value is None: return None
         return bool(value)
@@ -39,7 +57,7 @@ class BooleanField(Field):
 class UUIDField(Field):
     """UUID stored as a 32-char hex string (no dashes).
 
-    SQLite: ``TEXT``, MySQL: ``CHAR(32)``.
+    SQLite: ``TEXT``, MySQL: ``CHAR(32)``, PostgreSQL: native ``UUID``.
 
     Usage:
         import uuid
@@ -51,6 +69,8 @@ class UUIDField(Field):
     def _resolved_type(self, driver=None) -> str:
         if driver is not None and driver.name == "mysql":
             return "CHAR(32)"
+        if driver is not None and driver.name == "postgresql":
+            return "UUID"
         return "TEXT"
 
     def _coerce(self, value) -> uuid.UUID:
@@ -91,7 +111,7 @@ class UUIDField(Field):
 class JSONField(Field):
     """Stores JSON-serialisable Python values as JSON text.
 
-    SQLite: ``TEXT``, MySQL: ``JSON``.
+    SQLite: ``TEXT``, MySQL: ``JSON``, PostgreSQL: ``JSONB``.
     """
     def sql_type(self): return "JSON"
 
@@ -109,7 +129,9 @@ class JSONField(Field):
 
     def to_db(self, value):
         if value is None: return None
-        return json.dumps(value)
+        # Sorted keys: equal objects are stored as equal text, so exact
+        # lookups match regardless of key order (SQLite compares text).
+        return json.dumps(value, sort_keys=True)
 
     def from_db(self, value):
         if value is None: return None
@@ -121,7 +143,8 @@ class JSONField(Field):
 
 
 class BinaryField(Field):
-    """Raw binary data (bytes).  SQLite: ``BLOB``, MySQL: ``LONGBLOB``."""
+    """Raw binary data (bytes).  SQLite: ``BLOB``, MySQL: ``LONGBLOB``,
+    PostgreSQL: ``BYTEA``."""
 
     def __init__(self, max_length=None, **kwargs):
         super().__init__(**kwargs)

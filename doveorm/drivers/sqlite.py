@@ -275,8 +275,9 @@ class SQLiteDriver(DatabaseDriver):
             name = index_name("uq" if unique else "idx", table, columns)
         validate_identifier(name, "index name")
         kind = "UNIQUE INDEX" if unique else "INDEX"
+        qn = self.quote_name
         self._execute_statement(
-            f"CREATE {kind} IF NOT EXISTS {name} ON {table} ({', '.join(columns)})"
+            f"CREATE {kind} IF NOT EXISTS {qn(name)} ON {qn(table)} ({', '.join(qn(c) for c in columns)})"
         )
         return name
 

@@ -243,7 +243,7 @@ class QuerySet(SQLCompilerMixin, PrefetchMixin):
             return len(self._result_cache)
         db = self._db()
         driver = db.driver
-        table = self._model._table_name()
+        table = driver.quote_name(self._model._table_name())
         where_sql, params = self._build_where(driver)
         where = f" WHERE {where_sql}" if where_sql else ""
         if self._limit_val is None and not self._offset_val:
@@ -262,7 +262,7 @@ class QuerySet(SQLCompilerMixin, PrefetchMixin):
             return False
         db = self._db()
         driver = db.driver
-        table = self._model._table_name()
+        table = driver.quote_name(self._model._table_name())
         where_sql, params = self._build_where(driver)
         sql = f"SELECT 1 FROM {table}"
         if where_sql:
@@ -290,7 +290,7 @@ class QuerySet(SQLCompilerMixin, PrefetchMixin):
         db = self._db()
         where_sql, params = self._build_where(db.driver)
         self._guard_bulk("delete", where_sql)
-        sql = f"DELETE FROM {self._model._table_name()}"
+        sql = f"DELETE FROM {db.driver.quote_name(self._model._table_name())}"
         if where_sql:
             sql += f" WHERE {where_sql}"
         self._result_cache = None
@@ -308,21 +308,22 @@ class QuerySet(SQLCompilerMixin, PrefetchMixin):
         if not kwargs:
             return 0
         fields = self._model._fields
+        db = self._db()
+        qn = db.driver.quote_name
         set_parts = []
         set_params = []
         for col, value in kwargs.items():
             self._validate_column(col)
             field = fields[col]
-            set_parts.append(f"{col} = ?")
+            set_parts.append(f"{qn(col)} = ?")
             set_params.append(field.to_db(field.validate(field.to_python(value))))
         version = self._model._meta_version_field
         if version is not None and version not in kwargs:
             # keep optimistic locking sound: concurrent holders must see a new version
-            set_parts.append(f"{version} = {version} + 1")
-        db = self._db()
+            set_parts.append(f"{qn(version)} = {qn(version)} + 1")
         where_sql, where_params = self._build_where(db.driver)
         self._guard_bulk("update", where_sql)
-        sql = f"UPDATE {self._model._table_name()} SET {', '.join(set_parts)}"
+        sql = f"UPDATE {qn(self._model._table_name())} SET {', '.join(set_parts)}"
         if where_sql:
             sql += f" WHERE {where_sql}"
         self._result_cache = None

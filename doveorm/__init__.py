@@ -1,7 +1,7 @@
 """
 DoveORM – a lightweight ORM for Python.
 
-Supports SQLite (default) and MySQL backends.
+Supports SQLite (default), MySQL and PostgreSQL backends.
 
 Quick start (SQLite):
     from doveorm import Model, Database
@@ -12,10 +12,16 @@ Quick start (MySQL):
     db = MySQLDatabase(host="localhost", user="app",
                        password="secret", database="myapp")
 
-Requires Python 3.9+.  MySQL support needs ``pip install "doveorm[mysql]"`` (mysqlclient).
+Quick start (PostgreSQL):
+    from doveorm import Model, PostgreSQLDatabase
+    db = PostgreSQLDatabase(host="localhost", user="app",
+                            password="secret", database="myapp")
+
+Requires Python 3.9+.  MySQL support needs ``pip install "doveorm[mysql]"`` (mysqlclient);
+PostgreSQL support needs ``pip install "doveorm[postgres]"`` (psycopg 3, or psycopg2).
 """
 
-from .database import Database, MySQLDatabase
+from .database import Database, MySQLDatabase, PostgreSQLDatabase
 from .model import Model, table
 from .query import QuerySet, Q
 from .exceptions import (
@@ -89,6 +95,7 @@ from .migrations import Migrator
 __all__ = [
     "Database",
     "MySQLDatabase",
+    "PostgreSQLDatabase",
     "Model",
     "table",
     "QuerySet",

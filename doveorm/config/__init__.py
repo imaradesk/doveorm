@@ -27,6 +27,15 @@ Quick start
         LOG_QUERIES=False,
     )
 
+    # PostgreSQL
+    configure(
+        DATABASE_ENGINE="postgresql",
+        DATABASE_NAME="myapp",
+        DATABASE_HOST="127.0.0.1",
+        DATABASE_USER="app",
+        DATABASE_PASSWORD="secret",
+    )
+
     # Or use a dict (Django-style)
     configure(DATABASES={
         "default": {
@@ -80,7 +89,7 @@ _UNSET = object()
 
 _lock = threading.RLock()
 _settings: dict[str, Any] = dict(DEFAULTS)
-_database_instance = None    # lazily created Database / MySQLDatabase
+_database_instance = None    # lazily created Database / MySQLDatabase / PostgreSQLDatabase
 _configured = False
 
 

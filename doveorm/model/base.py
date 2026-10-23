@@ -341,16 +341,22 @@ class Model(FinderMixin, SchemaMixin, metaclass=ModelMeta):
             else:
                 col_names = list(fields)        # explicit PK value is inserted as-is
             values = [self._clean_for_db(n) for n in col_names]
+            qn = db.driver.quote_name
+            table = qn(cls._table_name())
             if col_names:
-                sql = (f"INSERT INTO {cls._table_name()} ({', '.join(col_names)}) "
+                sql = (f"INSERT INTO {table} ({', '.join(qn(n) for n in col_names)}) "
                        f"VALUES ({', '.join('?' for _ in col_names)})")
             elif db.driver_name == "mysql":
-                sql = f"INSERT INTO {cls._table_name()} () VALUES ()"
+                sql = f"INSERT INTO {table} () VALUES ()"
             else:
-                sql = f"INSERT INTO {cls._table_name()} DEFAULT VALUES"
+                sql = f"INSERT INTO {table} DEFAULT VALUES"
+            if pk_val is None:
+                sql += db.driver.returning_sql(pk)
             new_id = db.execute_write(sql, values)
             if pk_val is None:
                 object.__setattr__(self, pk, pk_field.from_db(new_id))
+            elif pk_field.auto_increment:
+                db.driver.sync_auto_increment(cls._table_name(), pk, pk_field.to_db(pk_val))
             object.__setattr__(self, "_persisted", True)
             self._deferred.clear()
         else:
@@ -364,8 +370,9 @@ class Model(FinderMixin, SchemaMixin, metaclass=ModelMeta):
                              if n not in self._deferred and n != version
                              and (n != pk or pk_val != original_pk)]
             if col_names:
+                qn = db.driver.quote_name
                 values = [self._clean_for_db(n) for n in col_names]
-                where = f"{pk} = ?"
+                where = f"{qn(pk)} = ?"
                 where_params = [pk_field.to_db(original_pk)]
                 new_version = None
                 if version is not None:
@@ -377,10 +384,10 @@ class Model(FinderMixin, SchemaMixin, metaclass=ModelMeta):
                     new_version = current + 1
                     col_names.append(version)
                     values.append(fields[version].to_db(fields[version].validate(new_version)))
-                    where += f" AND {version} = ?"
+                    where += f" AND {qn(version)} = ?"
                     where_params.append(fields[version].to_db(current))
-                set_clause = ", ".join(f"{n} = ?" for n in col_names)
-                sql = f"UPDATE {cls._table_name()} SET {set_clause} WHERE {where}"
+                set_clause = ", ".join(f"{qn(n)} = ?" for n in col_names)
+                sql = f"UPDATE {qn(cls._table_name())} SET {set_clause} WHERE {where}"
                 matched = db.execute_write(sql, values + where_params)
                 if matched == 0:
                     self._raise_missing_or_conflict(original_pk)
@@ -406,15 +413,17 @@ class Model(FinderMixin, SchemaMixin, metaclass=ModelMeta):
         pk_val = self._pk_snapshot if self._pk_snapshot is not None else getattr(self, pk)
         if pk_val is None:
             raise ValueError(f"Cannot delete an unsaved {cls.__name__}.")
-        sql = f"DELETE FROM {cls._table_name()} WHERE {pk} = ?"
+        db = cls._ensure_db()
+        qn = db.driver.quote_name
+        sql = f"DELETE FROM {qn(cls._table_name())} WHERE {qn(pk)} = ?"
         params = [cls._fields[pk].to_db(pk_val)]
         version = cls._meta_version_field
         checked = (version is not None and version not in self._deferred
                    and getattr(self, version) is not None)
         if checked:
-            sql += f" AND {version} = ?"
+            sql += f" AND {qn(version)} = ?"
             params.append(cls._fields[version].to_db(getattr(self, version)))
-        deleted = cls._ensure_db().execute_write(sql, params)
+        deleted = db.execute_write(sql, params)
         if deleted == 0 and checked:
             self._raise_missing_or_conflict(pk_val)
         object.__setattr__(self, pk, None)
