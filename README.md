@@ -68,7 +68,7 @@ pip install "doveorm[postgres]"
 In a `requirements.txt`:
 
 ```text
-doveorm[postgres]==0.5.0
+doveorm[postgres]==0.5.1
 ```
 
 Installing gives you the `doveorm` package and the [`doveorm` command](#%EF%B8%8F-the-doveorm-command).
