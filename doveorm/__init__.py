@@ -12,7 +12,7 @@ Quick start (MySQL):
     db = MySQLDatabase(host="localhost", user="app",
                        password="secret", database="myapp")
 
-Requires Python 3.9+.  MySQL support needs ``pip install mysqlclient``.
+Requires Python 3.9+.  MySQL support needs ``pip install "doveorm[mysql]"`` (mysqlclient).
 """
 
 from .database import Database, MySQLDatabase

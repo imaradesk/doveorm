@@ -142,7 +142,7 @@ data lives*:
   in-memory database, and `get_database()` raises until `configure()` has been called.
 - Unknown setting names (typos) raise `ConfigurationError` too.
 - Read secrets from the environment or a secret manager in *your* code — see
-  `makao-api/settings.py` for an example.
+  [`example/blog/settings.py`](example/blog/settings.py) for an example.
 
 ### 1. Keyword arguments (recommended)
 
@@ -742,13 +742,13 @@ class Post(Model):
 class Tag(Model):
     name = CharField(max_length=50, unique=True)
 
-get_database().execute_script("""
-    CREATE TABLE IF NOT EXISTS post_tags (
-        post_id INTEGER NOT NULL,
-        tag_id  INTEGER NOT NULL,
-        PRIMARY KEY (post_id, tag_id)
-    );
-""")
+class PostTag(Model):                   # the join table, so `doveorm generate` creates it
+    post_id = ForeignKey("Post", on_delete="CASCADE", nullable=False)
+    tag_id  = ForeignKey("Tag",  on_delete="CASCADE", nullable=False)
+
+    class Meta:
+        table_name = "post_tags"
+        unique_together = [("post_id", "tag_id")]   # each pair once
 
 post.tags.add(tag1, tag2)   # one batched INSERT; duplicates ignored
 post.tags.remove(tag1)
@@ -1107,7 +1107,7 @@ DoveORM talks to the database through a pluggable `DatabaseDriver` interface.
 | Driver | Backend | Library | Install |
 |---|---|---|---|
 | `SQLiteDriver` | SQLite 3 | `sqlite3` (stdlib) | built-in |
-| `MySQLDriver` | MySQL 5.7+ / MariaDB | `mysqlclient` | `pip install mysqlclient` |
+| `MySQLDriver` | MySQL 5.7+ / MariaDB | `mysqlclient` | `pip install "doveorm[mysql]"` |
 
 Both drivers use one connection per thread, nested transactions via SAVEPOINTs, and are
 **fork-safe**: a child process never reuses its parent's connection.
@@ -1398,7 +1398,7 @@ ticket = Ticket.create(title="Bug fix")
 
 print(User.findByUsername("titus"))            # <User id=1>
 print(User.countByActive(True))                # 1
-print(Post.where(title__icontains="imara").count())
+print(Post.where(title__icontains="doveorm").count())   # 1
 print(user.posts)                              # [<Post id=1>]
 print(post.author.username)                    # titus
 print(user.to_dict())                          # no password key
