@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "doveorm"
 dynamic = ["version"]
-description = "A lightweight, security-hardened Python ORM for SQLite and MySQL, with Django-style migrations."
+description = "A lightweight, security-hardened Python ORM for SQLite and MySQL."
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [{ name = "Titus Kilunda" }]
