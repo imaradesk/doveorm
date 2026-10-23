@@ -1,0 +1,33 @@
+# ── This repository publishes the DoveORM package only ──
+# Apps that merely *use* the ORM are kept out of it.
+makao-api/
+/app.py
+/models.py
+/seed.py
+
+# Databases and local data
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+_trial_temp/
+
+# Environments and secrets
+env/
+venv/
+.venv/
+.env
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store

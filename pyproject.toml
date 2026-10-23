@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doveorm"
+dynamic = ["version"]
+description = "A lightweight, security-hardened Python ORM for SQLite and MySQL, with Django-style migrations."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Titus Kilunda" }]
+keywords = ["orm", "database", "sqlite", "mysql", "migrations"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+    "Topic :: Database",
+    "Topic :: Database :: Front-Ends",
+    "Intended Audience :: Developers",
+]
+# Only needed to read doveorm.toml / pyproject.toml on Python < 3.11.
+dependencies = ["tomli>=1.1; python_version < '3.11'"]
+
+[project.optional-dependencies]
+mysql = ["mysqlclient>=2.1"]
+
+[project.scripts]
+doveorm = "doveorm.cli:main"
+
+[project.urls]
+Repository = "https://github.com/imaradesk/imara-orm"
+
+[tool.setuptools.packages.find]
+include = ["doveorm", "doveorm.*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "doveorm.__version__" }

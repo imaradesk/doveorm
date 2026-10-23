@@ -1,0 +1,5 @@
+# DoveORM's dependencies are declared in pyproject.toml (pip install doveorm).
+# None are required on Python 3.11+; on 3.9/3.10 the 'doveorm' command reads
+# doveorm.toml with: tomli>=1.1
+# Optional – MySQL backend (pip install "doveorm[mysql]"):
+# mysqlclient>=2.1
