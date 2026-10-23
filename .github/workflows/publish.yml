@@ -1,5 +1,5 @@
 # Publishes DoveORM to PyPI when a GitHub release is published.
-# Uses PyPI Trusted Publishing (OIDC) - no API token needs to be stored.
+# Authenticates with the PYPI_TOKEN repository secret (a PyPI API token).
 name: Publish to PyPI
 
 on:
@@ -31,11 +31,11 @@ jobs:
     environment:
       name: pypi
       url: https://pypi.org/p/doveorm
-    permissions:
-      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
