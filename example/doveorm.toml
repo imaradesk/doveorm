@@ -1,0 +1,4 @@
+# DoveORM project settings for the example (run 'doveorm --help' in this folder)
+models = ["blog.models"]
+migrations = "migrations"
+settings = "blog.settings:DOVEORM"

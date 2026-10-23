@@ -1347,6 +1347,18 @@ The suite covers SQLite end-to-end and the MySQL driver against a recording fake
 
 ## 📝 Full Example
 
+A complete, runnable project lives in [`example/`](example/): a small blog with every
+relationship type, a `doveorm.toml`, a generated migration and a demo script.
+
+```bash
+cd example
+doveorm apply          # create the tables (blog.db)
+python demo.py         # queries, relationships, updates; safe to re-run
+doveorm doctor         # health checks
+```
+
+The same features in one file:
+
 ```python
 import uuid
 from doveorm import (
