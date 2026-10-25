@@ -68,7 +68,7 @@ pip install "doveorm[postgres]"
 In a `requirements.txt`:
 
 ```text
-doveorm[postgres]==0.5.1
+doveorm[postgres]==0.6.0
 ```
 
 Installing gives you the `doveorm` package and the [`doveorm` command](#%EF%B8%8F-the-doveorm-command).
@@ -868,7 +868,8 @@ so keep side effects outside the database out of it.
 
 Django-style migrations: you change your models, `doveorm generate` writes a migration file
 describing the change, and `doveorm apply` applies it. Files live in your project and go in
-version control. Applied migrations are recorded in the `migrations` table.
+version control. Applied migrations are recorded in the `doveorm_migrations` table. (Older versions used `migrations`; that table is
+renamed automatically the first time a migration is applied.)
 
 ### Workflow
 
@@ -1061,6 +1062,13 @@ subfolder you start in.
 | `"myapp.boot:setup"` | a function that returns such a dict, or calls `doveorm.configure()` itself |
 | *(not set)* | `DOVEORM_*` environment variables (`DOVEORM_DATABASE_PATH=app.db` …) |
 
+**Model discovery.** If `models` is not set, the command searches the project folder for
+`models.py` files and `models/` packages (skipping hidden folders, virtualenvs, `tests`,
+`migrations`, `build`, `dist`) and prints what it found. Only those modules are imported.
+Models in other places (e.g. `app/db/schema.py`) must be listed under `models`. Because a
+module the search misses would look like a deleted model, `doveorm generate` refuses to drop
+models in discovery mode unless you pass `--yes`. Listing `models` explicitly turns this off.
+
 Flags override the file for one run: `--settings`, `--models` (repeatable or
 comma-separated), `--migrations`, `--config path/to/doveorm.toml`. Global flags work before
 or after the command name.
@@ -1160,7 +1168,7 @@ main(["apply"])                  # same as `doveorm apply`; returns the exit cod
 `doveorm.cli.health` has the checks as functions (`database_info`, `migration_info`,
 `schema_drift`, `run_checks`) if you want them in your own health endpoint.
 
-> **Security:** the command imports the `settings` and `models` modules you list, just like
+> **Security:** the command imports the `settings` and `models` modules you list (or that it discovers), just like
 > starting your app does, so only run it in projects you trust. `status` and `doctor` never
 > print the password. `connect` passes the MySQL / PostgreSQL password through a private
 > temporary option file / `PGPASSFILE` (mode 0600, deleted afterwards), never on the command
@@ -1534,6 +1542,23 @@ print(user.to_dict())                          # no password key
 ```
 
 ---
+
+## 📋 Changelog
+
+### 0.6.0
+
+- **Model auto-discovery.** `doveorm` finds `models.py` files and `models/` packages when
+  `models` is not set, and prints what it found. Only those modules are imported; hidden
+  folders, virtualenvs, `tests`, `migrations`, `build` and `dist` are skipped.
+- **Safer `generate`.** With discovered models, `doveorm generate` refuses to drop a model
+  unless you pass `--yes`, so a module the search missed can't turn into a `DROP TABLE`.
+- **Renamed history table.** Applied migrations are now recorded in `doveorm_migrations`
+  instead of `migrations`, which could collide with your own models. An existing
+  `migrations` table is renamed automatically the first time a migration is applied; read-only
+  commands (`history`, `status`, `doctor`) keep working before that. A `migrations` table
+  that isn't DoveORM's is left alone. **Upgrading:** apply once with the new version before
+  running older versions of DoveORM against the same database.
+- MySQL migration failures now tell you how to recover (`doveorm apply --fake`).
 
 ## 📄 License
 

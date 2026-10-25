@@ -11,6 +11,7 @@ The ``doveorm`` command reads its project settings from, in order:
 Example ``doveorm.toml``::
 
     models     = ["myapp.models"]       # modules that define your models
+                                        # (optional: models.py files are discovered)
     migrations = "migrations"           # relative to this file
     settings   = "myapp.settings:ORM"   # optional; else DOVEORM_* env vars
 
@@ -34,6 +35,37 @@ CONFIG_FILE = "doveorm.toml"
 PYPROJECT = "pyproject.toml"
 DEFAULT_MIGRATIONS = "migrations"
 _KEYS = {"models", "migrations", "settings", "env_prefix"}
+
+# Directories never searched for models (they hold dependencies, tests or build output).
+_SKIP_DIRS = {"tests", "test", "migrations", "build", "dist", "node_modules", "site-packages",
+              "__pycache__", "venv", "env"}
+
+
+def discover_models(root: str) -> list[str]:
+    """Dotted names of the ``models.py`` modules / ``models`` packages under *root*.
+
+    Only looks at file names — nothing is imported here.  Hidden folders,
+    virtual environments, tests and migrations are skipped.
+    """
+    found = []
+    for current, dirs, files in os.walk(root):
+        dirs[:] = sorted(
+            d for d in dirs
+            if not d.startswith((".", "_")) and d not in _SKIP_DIRS
+            and not d.endswith(".egg-info")
+            and not os.path.isfile(os.path.join(current, d, "pyvenv.cfg"))
+        )
+        parts = os.path.relpath(current, root).split(os.sep)
+        parts = [] if parts == ["."] else parts
+        if not all(p.isidentifier() for p in parts):
+            dirs[:] = []
+            continue
+        if "models.py" in files:
+            found.append(".".join([*parts, "models"]))
+        if "models" in dirs and os.path.isfile(os.path.join(current, "models", "__init__.py")):
+            found.append(".".join([*parts, "models"]))
+            dirs.remove("models")           # the package imports its own submodules
+    return sorted(set(found))
 
 
 def _load_toml(path: str) -> dict:
@@ -86,6 +118,7 @@ class Project:
     settings: str | None = None
     env_prefix: str = "DOVEORM_"
     config_path: str | None = None
+    discovered: bool = False                # models were found by searching, not listed
     _ready: bool = field(default=False, repr=False)
 
     # ── loading ──
@@ -146,6 +179,11 @@ class Project:
         if self.root not in sys.path:
             sys.path.insert(0, self.root)
         self._configure()
+        if not self.models:
+            self.models = discover_models(self.root)
+            self.discovered = bool(self.models)
+            if self.discovered:
+                print(f"Discovered models: {', '.join(self.models)}", file=sys.stderr)
         for name in self.models:
             _import(name, "models module")
         self._ready = True

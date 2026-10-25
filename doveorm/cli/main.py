@@ -78,6 +78,8 @@ def build_parser(prog: str = PROG) -> argparse.ArgumentParser:
                    help="value for existing rows of a new NOT NULL column (Python literal)")
     s.add_argument("--rename", action="append", default=[], metavar="NEW=OLD",
                    help="declare a rename: Model.new_field=old_field or NewModel=OldModel")
+    s.add_argument("-y", "--yes", action="store_true",
+                   help="allow dropping models when the models were auto-discovered")
 
     s = cmd("merge", "join conflicting migration branches with a merge migration")
     s.add_argument("-n", "--name")
@@ -226,8 +228,21 @@ def _require_models() -> None:
     from ..migrations.commands import project_models
     if not project_models():
         raise ConfigurationError(
-            "No models are registered. List your model modules under 'models' in "
+            "No models are registered (none found named models.py). List your model modules under 'models' in "
             f"{CONFIG_FILE} (or pass --models myapp.models)."
+        )
+
+
+def _refuse_discovered_drops(project: Project) -> None:
+    """A model the search missed looks deleted; make the user confirm real drops."""
+    from ..migrations.operations.models import DeleteModel
+    ops = health.unmigrated_operations(project.migrations)
+    drops = [op.describe() for op in ops if isinstance(op, DeleteModel)]
+    if drops:
+        raise ConfigurationError(
+            "Models were auto-discovered and this migration would drop: "
+            + "; ".join(drops) + ". If a models module was missed, list it under 'models' in "
+            f"{CONFIG_FILE}; if the drop is intended, re-run with --yes."
         )
 
 
@@ -252,6 +267,8 @@ def cmd_generate(project: Project, args) -> int:
         renames[new.strip()] = old.strip()
     if not args.empty:
         _require_models()
+        if project.discovered and not args.yes:
+            _refuse_discovered_drops(project)
     interactive = not args.no_input and sys.stdin.isatty()
     questioner = (InteractiveQuestioner if interactive else Questioner)(defaults=defaults, renames=renames)
     result = commands.makemigrations(project.migrations, name=args.name, empty=args.empty,

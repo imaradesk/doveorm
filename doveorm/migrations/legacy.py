@@ -18,7 +18,7 @@ import logging
 from typing import Callable
 
 from ..exceptions import MigrationError
-from .recorder import MigrationRecord
+from .recorder import MigrationRecord, MigrationRecorder
 
 log = logging.getLogger("doveorm.migrations")
 
@@ -44,6 +44,7 @@ class Migrator:
         self._steps: list[tuple[str, Callable, Callable | None]] = []
         # Bootstrap the migrations table itself
         self._bind()
+        MigrationRecorder(db).ensure_table()      # also renames a pre-0.6 "migrations" table
         Migration.create_table()
 
     def _bind(self) -> None:
