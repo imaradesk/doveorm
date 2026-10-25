@@ -483,6 +483,27 @@ class TestSQLiteEndToEnd(RegistryMixin, unittest.TestCase):
         m.migrate()
         self.assertEqual(M.MigrationRecorder(self.db).applied(), ["0001_old"])
 
+    def test_pre_0_6_history_table_is_renamed(self):
+        self.db.execute_ddl("CREATE TABLE migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                            "name TEXT NOT NULL UNIQUE, applied_at TEXT)")
+        self.db.execute_write("INSERT INTO migrations (name) VALUES ('0001_old')")
+        rec = M.MigrationRecorder(self.db)
+        self.assertEqual(rec.applied(), ["0001_old"])          # readable before the rename
+        self.assertFalse(self.db.table_exists("doveorm_migrations"))
+        rec.ensure_table()
+        self.assertFalse(self.db.table_exists("migrations"))
+        self.assertEqual(rec.applied(), ["0001_old"])
+        rec.record_applied("0002_new")
+        self.assertEqual(rec.applied(), ["0001_old", "0002_new"])
+
+    def test_unrelated_migrations_table_is_left_alone(self):
+        self.db.execute_ddl("CREATE TABLE migrations (id INTEGER PRIMARY KEY, batch INTEGER)")
+        rec = M.MigrationRecorder(self.db)
+        self.assertEqual(rec.applied(), [])
+        rec.ensure_table()
+        self.assertTrue(self.db.table_exists("migrations"))
+        self.assertTrue(self.db.table_exists("doveorm_migrations"))
+
     def test_internal_model_not_migrated(self):
         names = [m.__name__ for m in M.commands.project_models()]
         self.assertNotIn("MigrationRecord", names)

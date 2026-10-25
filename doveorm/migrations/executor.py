@@ -152,7 +152,8 @@ class MigrationExecutor:
         except Exception as exc:
             hint = ""
             if not self.db.driver.supports_transactional_ddl:
-                hint = " (MySQL cannot roll back DDL: statements before the failure stay applied)"
+                hint = (" (MySQL cannot roll back DDL: statements before the failure stay applied."
+                        " Fix the schema by hand, then run 'doveorm apply --fake' to record it)")
             raise MigrationError(f"Migration {migration.name} failed{hint}: {exc}") from exc
         self._recorded_cache = None
         return state

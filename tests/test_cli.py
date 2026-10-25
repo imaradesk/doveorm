@@ -197,9 +197,26 @@ class TestMigrationCommands(ProjectMixin, unittest.TestCase):
 
     def test_generate_refuses_without_models(self):
         self.write("doveorm.toml", f'settings = "{self.app}.settings:DOVEORM"\n')
+        os.remove(f"{self.app}/models.py")
         self.assertIn("No models are registered", self.run_cli("generate", code=1))
         self.assertFalse(os.path.isdir("migrations"))
         self.assertIn("No models are registered", self.run_cli("verify", code=1))
+
+    def test_models_are_discovered_when_not_listed(self):
+        self.write("doveorm.toml", f'settings = "{self.app}.settings:DOVEORM"\n')
+        os.makedirs("tests")
+        self.write("tests/models.py", "raise RuntimeError('must not be imported')\n")
+        out = self.run_cli("generate")
+        self.assertIn(f"Discovered models: {self.app}.models", out)
+        self.assertIn("Create model Customer", out)
+
+    def test_discovered_models_cannot_be_dropped_without_yes(self):
+        self.run_cli("generate")
+        self.write("doveorm.toml", f'settings = "{self.app}.settings:DOVEORM"\n')
+        self.write(f"{self.app}/models.py", "from doveorm import Model, CharField\n"
+                   "class Other(Model):\n    name = CharField(max_length=5)\n")
+        self.assertIn("would drop", self.run_cli("generate", "--no-input", code=1))
+        self.assertIn("Delete model", self.run_cli("generate", "--no-input", "--yes"))
 
     def test_full_workflow(self):
         out = self.run_cli("generate")
@@ -344,7 +361,7 @@ class TestDatabaseCommands(ProjectMixin, unittest.TestCase):
     def test_doctor_unmigrated_change_and_unknown_history(self):
         self.run_cli("apply")
         db = doveorm.Database("app.db")
-        db.execute_write("INSERT INTO migrations (name) VALUES ('0099_gone')")
+        db.execute_write("INSERT INTO doveorm_migrations (name) VALUES ('0099_gone')")
         db.close_all()
         self.add_field()
         out = self.run_cli("doctor", code=1)

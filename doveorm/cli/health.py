@@ -150,6 +150,11 @@ def migration_info(db, directory: str) -> MigrationInfo:
 
 def unmigrated_changes(directory: str, models=None) -> list[str]:
     """Model changes that no migration file covers yet (descriptions)."""
+    return [op.describe() for op in unmigrated_operations(directory, models)]
+
+
+def unmigrated_operations(directory: str, models=None) -> list:
+    """The operations a new migration would contain."""
     from ..migrations.autodetector import Autodetector
     from ..migrations.commands import _history, project_models
     from ..migrations.loader import MigrationLoader
@@ -162,7 +167,7 @@ def unmigrated_changes(directory: str, models=None) -> list[str]:
 
     _graph, history = _history(MigrationLoader(directory))
     target = ProjectState.from_models(project_models(models))
-    return [op.describe() for op in Autodetector(history, target, _Silent()).changes()]
+    return list(Autodetector(history, target, _Silent()).changes())
 
 
 def schema_drift(db, models=None) -> list[str]:
