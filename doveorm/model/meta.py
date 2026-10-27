@@ -33,6 +33,7 @@ class ModelMeta(type):
         is_root = name == "Model" and namespace.get("__module__") == _ROOT_MODULE
         meta = namespace.get("Meta")
         _abstract = bool(getattr(meta, "abstract", False))
+        _migrate = bool(getattr(meta, "migrate", True))
 
         fields: dict[str, Field] = {}
 
@@ -78,6 +79,7 @@ class ModelMeta(type):
         namespace["_db"] = None          # set later via Model.use(db)
         namespace["_registry"] = mcs._registry
         namespace["_abstract"] = _abstract
+        namespace["_migrate"] = _migrate
         namespace["_finder_cache"] = {}
 
         # @table() overrides Meta if both are present (applied by the decorator)

@@ -68,7 +68,7 @@ pip install "doveorm[postgres]"
 In a `requirements.txt`:
 
 ```text
-doveorm[postgres]==0.7.0
+doveorm[postgres]==0.8.0
 ```
 
 Installing gives you the `doveorm` package and the [`doveorm` command](#%EF%B8%8F-the-doveorm-command).
@@ -330,7 +330,7 @@ class Post(Model):
 ```
 
 If both are present, `@table()` values win. Supported options: `table_name` / `name`,
-`indexes`, `unique_together`, `ordering`, `engine`, `charset`, `version_field`, and
+`indexes`, `unique_together`, `ordering`, `engine`, `charset`, `version_field`, `migrate`, and
 `abstract` (Meta only).
 
 ### Style 3: Minimal
@@ -356,6 +356,23 @@ class TimeStamped(Model):
 class Article(TimeStamped):
     title = CharField(max_length=200)
 ```
+
+### Models that migrations should not touch (`migrate = False`)
+
+Use `migrate = False` for a table that DoveORM must not create, alter or drop: a database view,
+or a table owned by another service or a legacy system. The model works normally for queries,
+saves and relationships, but `doveorm generate`, `verify` and the schema checks ignore it, and
+`doveorm models` lists it as `external`.
+
+```python
+@table(name="legacy_customers", migrate=False)      # or: class Meta: migrate = False
+class LegacyCustomer(Model):
+    name = CharField(max_length=100)
+```
+
+You create the table yourself, so it must already exist before you query it. A model that is
+migrated cannot have a `ForeignKey` to a `migrate = False` model: use a plain integer or UUID
+field for the key instead. Unlike `abstract`, the option is not inherited by subclasses.
 
 ### UUID primary keys
 
@@ -1080,6 +1097,37 @@ Models in other places (e.g. `app/db/schema.py`) must be listed under `models`. 
 module the search misses would look like a deleted model, `doveorm generate` refuses to drop
 models in discovery mode unless you pass `--yes`. Listing `models` explicitly turns this off.
 
+#### All the ways to tell `doveorm` where your models are
+
+A model is registered when its module is imported, so every option below is just a different
+way of getting your model modules imported. They combine freely; duplicates are ignored.
+
+| # | Way | Example | Finds |
+|---|---|---|---|
+| 1 | **Module** | `models = ["users.models"]` | exactly that module |
+| 2 | **Several modules** | `models = ["users.models", "permissions.core.models"]` | models in any number of packages, however nested |
+| 3 | **Package** | `models = ["permissions.core"]` | the package and its `models` submodule |
+| 4 | **Glob** | `models = ["billing.*.models"]` | every module under the project folder matching the pattern |
+| 5 | **Auto-discovery** | leave `models` empty | every `models.py` and `models/` package under the project folder |
+| 6 | **Discovery + list** | `discover = true` | the list, plus everything discovery finds |
+| 7 | **Entry points** | `entry_points = true` | model modules that installed packages register under `doveorm.models` |
+| 8 | **Command-line flag** | `doveorm generate -m users.models -m billing.models` | overrides the file for one run (repeatable or comma-separated) |
+| 9 | **`pyproject.toml`** | `[tool.doveorm]` with the same keys | same as the file, in one config file |
+| 10 | **Your own code** | `import myapp.models` before `Model` use | no `doveorm` command: importing is enough |
+
+Which to pick:
+
+- **One app, standard layout:** leave `models` empty (5). Discovery covers it.
+- **Several packages in one repo:** list them (2), or use packages/globs (3, 4) to avoid
+  maintaining a long list.
+- **Client or plugin packages installed with pip:** have them register an entry point (7), or
+  list their modules (1/2). Discovery (5, 6) and globs (4) only look inside the project folder.
+- **Models in unusual files** (`app/db/schema.py`): list them (1/2); discovery only matches
+  files named `models.py` and `models/` packages.
+- **Safety:** discovery (5, 6) can miss a module, which would look like a deleted model, so
+  `doveorm generate` refuses to drop models in that mode unless you pass `--yes`. Listing
+  every module explicitly (1-4, 7) turns that off.
+
 **Models in several packages.** `models` takes any number of importable modules, wherever
 they live (including installed packages):
 
@@ -1583,6 +1631,16 @@ print(user.to_dict())                          # no password key
 ---
 
 ## 📋 Changelog
+
+### 0.8.0
+
+- **`migrate = False`.** A model declared with `@table(migrate=False)` or `class Meta: migrate = False`
+  is left alone by `doveorm generate`, `verify` and the schema checks, for database views and
+  tables owned by another service. It still works for queries, saves and relationships, and
+  `doveorm models` lists it as `external`. A migrated model can't have a `ForeignKey` to it; the
+  error now says so.
+- **Docs:** a table of all the ways to tell `doveorm` where your models are, including the
+  `__init__.py` imports a `models/` package needs.
 
 ### 0.7.0
 
