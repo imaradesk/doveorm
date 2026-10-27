@@ -88,6 +88,11 @@ from .fields import (
     # Relationships
     ForeignKey,
     OneToOneField,
+    CASCADE,
+    SET_NULL,
+    SET_DEFAULT,
+    RESTRICT,
+    NO_ACTION,
 )
 from .relationships import HasMany, HasOne, BelongsTo, ManyToMany, ManyToManyManager
 from .migrations import Migrator
@@ -162,6 +167,11 @@ __all__ = [
     # Fields – relationships
     "ForeignKey",
     "OneToOneField",
+    "CASCADE",
+    "SET_NULL",
+    "SET_DEFAULT",
+    "RESTRICT",
+    "NO_ACTION",
     # Relationships
     "HasMany",
     "HasOne",
@@ -170,4 +180,4 @@ __all__ = [
     "ManyToManyManager",
 ]
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"

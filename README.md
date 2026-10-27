@@ -68,7 +68,7 @@ pip install "doveorm[postgres]"
 In a `requirements.txt`:
 
 ```text
-doveorm[postgres]==0.6.0
+doveorm[postgres]==0.7.0
 ```
 
 Installing gives you the `doveorm` package and the [`doveorm` command](#%EF%B8%8F-the-doveorm-command).
@@ -484,7 +484,18 @@ These fields store paths only — file storage is up to your application.
 | `OneToOneField("User", on_delete="CASCADE")` | type of the target's PK + `UNIQUE` | |
 
 `on_delete` must be one of `CASCADE`, `SET NULL` (requires `nullable=True`), `SET DEFAULT`,
-`RESTRICT`, `NO ACTION`.
+`RESTRICT`, `NO ACTION`. Write it as a string or use the constants, whichever you prefer
+(they are the same values):
+
+```python
+from doveorm import fields
+
+user   = fields.ForeignKey("User", on_delete="CASCADE")
+editor = fields.ForeignKey("User", on_delete=fields.SET_NULL, nullable=True)   # also: from doveorm import SET_NULL
+```
+
+The constants are `CASCADE`, `SET_NULL`, `SET_DEFAULT`, `RESTRICT` and `NO_ACTION`; the string
+is case-insensitive and `"set_null"` works as well as `"SET NULL"`.
 
 ### Common field options
 
@@ -1069,8 +1080,36 @@ Models in other places (e.g. `app/db/schema.py`) must be listed under `models`. 
 module the search misses would look like a deleted model, `doveorm generate` refuses to drop
 models in discovery mode unless you pass `--yes`. Listing `models` explicitly turns this off.
 
+**Models in several packages.** `models` takes any number of importable modules, wherever
+they live (including installed packages):
+
+```toml
+models = [
+  "users.models",           # a module
+  "permissions.core",       # a package: it and its `models` submodule are imported
+  "billing.*.models",       # glob over the modules in the project folder
+]
+discover     = true         # also search the project folder, in addition to the list
+entry_points = true         # also load packages' "doveorm.models" entry points
+```
+
+Globs match dotted module names found under the project folder (`*` also matches dots), and
+a pattern that matches nothing is an error. With `discover = true`, `generate` keeps its
+drop protection, since a missed module would look like a deleted model.
+
+Packages you install (e.g. a client's plugin) can register themselves instead of being listed:
+
+```toml
+# the plugin's pyproject.toml
+[project.entry-points."doveorm.models"]
+acme_crm = "acme_crm.models"
+```
+
+and your project opts in with `entry_points = true`. It is off by default because it imports
+every installed package that registers under that group.
+
 Flags override the file for one run: `--settings`, `--models` (repeatable or
-comma-separated), `--migrations`, `--config path/to/doveorm.toml`. Global flags work before
+comma-separated), `--discover`, `--entry-points`, `--migrations`, `--config path/to/doveorm.toml`. Global flags work before
 or after the command name.
 
 ### Commands
@@ -1544,6 +1583,19 @@ print(user.to_dict())                          # no password key
 ---
 
 ## 📋 Changelog
+
+### 0.7.0
+
+- **Models in several packages.** `models` entries can now be a package (`"permissions.core"`
+  imports it and its `models` submodule) or a glob (`"billing.*.models"`, matched against the
+  modules in the project folder; a pattern that matches nothing is an error).
+- **`discover = true`** (or `--discover`) searches the project folder in addition to the listed
+  models instead of only when the list is empty. `generate` keeps its drop protection.
+- **Entry points.** Installed packages can register model modules under the `doveorm.models`
+  entry point group; projects opt in with `entry_points = true` (or `--entry-points`).
+- **`on_delete` constants.** `fields.CASCADE`, `SET_NULL`, `SET_DEFAULT`, `RESTRICT` and
+  `NO_ACTION` (also importable from `doveorm`) work alongside the plain strings, which now
+  also accept `"set_null"`. The values are identical, so migrations are unchanged.
 
 ### 0.6.0
 

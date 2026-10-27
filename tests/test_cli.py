@@ -75,9 +75,10 @@ class ProjectMixin:
 
     def run_cli(self, *argv, code=0):
         # Each run is a fresh process in real life: re-import the app's modules.
-        for name in [m for m in sys.modules if m == self.app or m.startswith(self.app + ".")]:
+        apps = (self.app, getattr(self, "sub", None))
+        for name in [m for m in sys.modules if any(a and (m == a or m.startswith(a + ".")) for a in apps)]:
             del sys.modules[name]
-        for name in ("Customer", "Order"):
+        for name in ("Customer", "Order", "Role"):
             ModelMeta._registry.pop(name, None)
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -209,6 +210,70 @@ class TestMigrationCommands(ProjectMixin, unittest.TestCase):
         out = self.run_cli("generate")
         self.assertIn(f"Discovered models: {self.app}.models", out)
         self.assertIn("Create model Customer", out)
+
+    def _second_app(self):
+        """A second package, nested two levels deep, with its own models."""
+        self.sub = "perm_" + uuid.uuid4().hex[:8]
+        os.makedirs(f"{self.sub}/core")
+        self.write(f"{self.sub}/__init__.py", "")
+        self.write(f"{self.sub}/core/__init__.py", "")
+        self.write(f"{self.sub}/core/models.py",
+                   "from doveorm import Model, CharField\n"
+                   "class Role(Model):\n    name = CharField(max_length=20)\n")
+
+    def _cfg(self, models, extra=""):
+        self.write("doveorm.toml", f'models = {models!r}\n'.replace("'", '"')
+                   + f'settings = "{self.app}.settings:DOVEORM"\n' + extra)
+
+    def test_models_spread_over_several_packages(self):
+        self._second_app()
+        self._cfg([f"{self.app}.models", f"{self.sub}.core.models"])
+        out = self.run_cli("generate", "--dry-run")
+        self.assertIn("name='Customer'", out)
+        self.assertIn("name='Role'", out)
+
+    def test_package_entry_loads_its_models_submodule(self):
+        self._second_app()
+        self._cfg([self.app, f"{self.sub}.core"])
+        out = self.run_cli("generate", "--dry-run")
+        self.assertIn("name='Customer'", out)
+        self.assertIn("name='Role'", out)
+
+    def test_glob_entries(self):
+        self._second_app()
+        self._cfg([f"{self.sub}.*.models", f"{self.app}.mod*"])
+        out = self.run_cli("generate", "--dry-run")
+        self.assertIn("name='Role'", out)
+        self.assertIn("name='Customer'", out)
+        self._cfg(["nothing_*.models"])
+        self.assertIn("matches no module", self.run_cli("generate", code=1))
+
+    def test_discover_adds_to_explicit_list(self):
+        self._second_app()
+        self._cfg([f"{self.app}.models"], "discover = true\n")
+        out = self.run_cli("generate", "--dry-run")
+        self.assertIn(f"Discovered models: {self.sub}.core.models", out)
+        self.assertIn("name='Role'", out)
+        self._cfg([f"{self.app}.models"])
+        self.assertNotIn("name='Role'", self.run_cli("generate", "--dry-run"))
+        self.assertIn("name='Role'", self.run_cli("generate", "--dry-run", "--discover"))
+
+    def test_entry_points_are_loaded_when_enabled(self):
+        self._second_app()
+        ep = mock.Mock(value=f"{self.sub}.core.models:something")
+        eps = mock.Mock()
+        eps.select.return_value = [ep]
+        self._cfg([f"{self.app}.models"], "entry_points = true\n")
+        with mock.patch("importlib.metadata.entry_points", return_value=eps):
+            self.assertIn("name='Role'", self.run_cli("generate", "--dry-run"))
+            self._cfg([f"{self.app}.models"])
+            self.assertNotIn("name='Role'", self.run_cli("generate", "--dry-run"))
+            self.assertIn("name='Role'", self.run_cli("generate", "--dry-run", "--entry-points"))
+
+    def test_discover_and_entry_points_must_be_booleans(self):
+        self.write("doveorm.toml", 'discover = "yes"\n')
+        with self.assertRaises(ConfigurationError):
+            Project.load()
 
     def test_discovered_models_cannot_be_dropped_without_yes(self):
         self.run_cli("generate")

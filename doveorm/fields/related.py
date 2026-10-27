@@ -4,7 +4,15 @@ from __future__ import annotations
 from ..exceptions import ValidationError
 from .base import Field
 
-ON_DELETE_ACTIONS = ("CASCADE", "SET NULL", "SET DEFAULT", "RESTRICT", "NO ACTION")
+# The constants are the plain strings, so ``on_delete=CASCADE`` and
+# ``on_delete="CASCADE"`` are the same value (and migrations write the string).
+CASCADE = "CASCADE"
+SET_NULL = "SET NULL"
+SET_DEFAULT = "SET DEFAULT"
+RESTRICT = "RESTRICT"
+NO_ACTION = "NO ACTION"
+
+ON_DELETE_ACTIONS = (CASCADE, SET_NULL, SET_DEFAULT, RESTRICT, NO_ACTION)
 
 
 class ForeignKey(Field):
@@ -17,11 +25,15 @@ class ForeignKey(Field):
     Usage:
         class Post(Model):
             author_id = ForeignKey("User", on_delete="CASCADE")
+            editor_id = ForeignKey("User", on_delete=SET_NULL, nullable=True)
+
+    ``on_delete`` is a string or one of the constants ``CASCADE``, ``SET_NULL``,
+    ``SET_DEFAULT``, ``RESTRICT``, ``NO_ACTION`` (also ``fields.CASCADE`` …).
     """
 
-    def __init__(self, to, on_delete="CASCADE", related_name=None, **kwargs):
+    def __init__(self, to, on_delete=CASCADE, related_name=None, **kwargs):
         super().__init__(**kwargs)
-        action = " ".join(str(on_delete).upper().split())
+        action = " ".join(str(on_delete).upper().replace("_", " ").split())     # "set_null" works too
         if action not in ON_DELETE_ACTIONS:
             raise ValueError(f"on_delete must be one of {ON_DELETE_ACTIONS}, got {on_delete!r}.")
         if action == "SET NULL" and not self.nullable:
@@ -95,6 +107,6 @@ class OneToOneField(ForeignKey):
             user_id = OneToOneField("User", on_delete="CASCADE")
     """
 
-    def __init__(self, to, on_delete="CASCADE", related_name=None, **kwargs):
+    def __init__(self, to, on_delete=CASCADE, related_name=None, **kwargs):
         kwargs["unique"] = True
         super().__init__(to, on_delete=on_delete, related_name=related_name, **kwargs)

@@ -41,7 +41,10 @@ from .text import (
 from .temporal import DateField, DateTimeField, TimeField, DurationField
 from .special import BooleanField, UUIDField, JSONField, BinaryField
 from .files import FileField, ImageField, FilePathField
-from .related import ON_DELETE_ACTIONS, ForeignKey, OneToOneField
+from .related import (
+    CASCADE, SET_NULL, SET_DEFAULT, RESTRICT, NO_ACTION,
+    ON_DELETE_ACTIONS, ForeignKey, OneToOneField,
+)
 
 __all__ = [
     "Field",
@@ -55,5 +58,6 @@ __all__ = [
     "DateField", "DateTimeField", "TimeField", "DurationField",
     "UUIDField", "JSONField", "BinaryField",
     "FileField", "ImageField", "FilePathField",
+    "CASCADE", "SET_NULL", "SET_DEFAULT", "RESTRICT", "NO_ACTION",
     "ON_DELETE_ACTIONS", "ForeignKey", "OneToOneField",
 ]

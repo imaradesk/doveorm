@@ -44,6 +44,10 @@ def _common() -> argparse.ArgumentParser:
                    help="settings as module or module:attribute")
     c.add_argument("-m", "--models", action="append", default=argparse.SUPPRESS, metavar="MODULE",
                    help="module that defines models (repeatable, or comma-separated)")
+    c.add_argument("--discover", action="store_true", default=argparse.SUPPRESS,
+                   help="also discover models.py files / models packages in the project folder")
+    c.add_argument("--entry-points", action="store_true", default=argparse.SUPPRESS,
+                   help="also load models registered by installed packages (entry point group 'doveorm.models')")
     c.add_argument("--migrations", default=argparse.SUPPRESS, metavar="DIR", help="migrations folder")
     c.add_argument("-v", "--verbose", action="store_true", default=argparse.SUPPRESS,
                    help="also log executed SQL")
@@ -136,7 +140,8 @@ def build_parser(prog: str = PROG) -> argparse.ArgumentParser:
 def main(argv=None, prog: str = PROG) -> int:
     args = build_parser(prog).parse_args(argv)
     for name, default in (("config", None), ("settings", None), ("models", None),
-                          ("migrations", None), ("verbose", False)):
+                          ("migrations", None), ("verbose", False),
+                          ("discover", None), ("entry_points", None)):
         if not hasattr(args, name):
             setattr(args, name, default)
     _setup_logging(args.verbose)
@@ -146,7 +151,8 @@ def main(argv=None, prog: str = PROG) -> int:
             return cmd_init(args)
         models = [m.strip() for spec in (args.models or []) for m in spec.split(",") if m.strip()]
         project = Project.load(config=args.config, settings=args.settings, models=models,
-                               migrations=args.migrations)
+                               migrations=args.migrations, discover=args.discover,
+                               entry_points=args.entry_points)
         project.setup()
         return COMMANDS[args.command](project, args)
     except ORMError as exc:
