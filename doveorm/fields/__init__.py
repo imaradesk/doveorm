@@ -14,7 +14,7 @@ Value pipeline
 * ``from_db(value)``   – convert a DB value back into Python.
 * ``pre_save(instance, add)`` – hook run by ``Model.save()`` (auto_now …).
 
-Full Django-compatible field set:
+Available fields:
     AutoField, BigAutoField, SmallAutoField,
     IntegerField, BigIntegerField, SmallIntegerField,
     PositiveIntegerField, PositiveSmallIntegerField, PositiveBigIntegerField,

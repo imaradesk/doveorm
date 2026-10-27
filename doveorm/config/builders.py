@@ -45,7 +45,7 @@ def build_database(settings: dict) -> "Database":
 
 
 def _build_from_db_dict(d: dict, settings: dict) -> "Database":
-    """Build a Database from a Django-style DATABASES.default dict."""
+    """Build a Database from a DATABASES.default dict."""
     return _construct(
         engine=str(d.get("ENGINE", "sqlite")),
         path=d.get("NAME"),
@@ -66,7 +66,7 @@ def _construct(*, engine, path, host, port, user, password, name, charset,
     from ..drivers.sqlite import SQLiteDriver
 
     engine = engine.lower()
-    # Normalise Django-style engine paths  (e.g. "django.db.backends.sqlite3")
+    # Normalise dotted engine paths  (e.g. "django.db.backends.sqlite3")
     if "sqlite" in engine:
         engine = "sqlite"
     elif "mysql" in engine:

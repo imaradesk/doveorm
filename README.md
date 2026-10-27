@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">🕊️ DoveORM</h1>
   <p align="center">
-    <strong>A lightweight, expressive, security-hardened Python ORM — inspired by Django, Spring Boot & ActiveRecord.</strong>
+    <strong>A lightweight, expressive, security-hardened Python ORM.</strong>
   </p>
   <p align="center">
     <em>Python 3.9+ · Zero dependencies for SQLite · mysqlclient for MySQL · psycopg for PostgreSQL · Works with Flask, FastAPI, or standalone</em>
@@ -27,20 +27,20 @@
 
 ## ✨ What is DoveORM?
 
-**DoveORM** is a lightweight yet fully-featured Python ORM designed to feel familiar whether you come from **Django**, **Spring Boot / JPA**, or **Ruby on Rails / ActiveRecord**.
+**DoveORM** is a lightweight yet fully-featured Python ORM with validated models, chainable queries, relationships and migrations behind one small, consistent API.
 
 ### Highlights
 
 | Feature | |
 |---|---|
-| **Django-style** `class Meta` and **Spring Boot-style** `@table()` decorator | ✅ |
+| **`@table()` decorator** and **`class Meta`** model declarations | ✅ |
 | **Dynamic finders** — `findByEmail`, `findAllByActive`, `countBy…`, `existsBy…` | ✅ |
 | **Chainable, lazy QuerySet** with `Q` objects, result caching and slicing | ✅ |
-| **Django-compatible field set** (30+ fields) with validation | ✅ |
+| **30+ field types** with validation | ✅ |
 | **SQLite, MySQL/MariaDB and PostgreSQL** behind a pluggable driver interface | ✅ |
 | **Thread-safe & fork-safe** connections, **nested transactions** (SAVEPOINTs) | ✅ |
 | **Deadlock-retrying transactions** — `db.run_in_transaction(fn)` | ✅ |
-| **Django-style migrations** — autodetected, optimized, reversible, squashable | ✅ |
+| **Migrations** — autodetected, optimized, reversible, squashable | ✅ |
 | **`doveorm` command** — `generate`, `apply`, `revert`, `status`, `doctor`, `console`… | ✅ |
 | **pip-installable**, standalone — no web framework required | ✅ |
 | **Optimistic locking**, **mass-assignment protection**, **sensitive fields** | ✅ |
@@ -188,7 +188,7 @@ db = configure(
 
 # PostgreSQL
 db = configure(
-    DATABASE_ENGINE="postgresql",  # "postgres" and Django's "django.db.backends.postgresql" work too
+    DATABASE_ENGINE="postgresql",  # "postgres" and "django.db.backends.postgresql" work too
     DATABASE_NAME="myapp",
     DATABASE_HOST="127.0.0.1",
     DATABASE_PORT=5432,            # optional: 5432 is the default
@@ -198,7 +198,7 @@ db = configure(
 )
 ```
 
-### 2. Django-style `DATABASES` dict
+### 2. `DATABASES` dict
 
 ```python
 import os
@@ -290,7 +290,7 @@ User.create_table()
 
 ## 📐 Defining Models
 
-### Style 1: `@table()` decorator (Spring Boot / JPA style)
+### Style 1: `@table()` decorator
 
 ```python
 from doveorm import Model, table, CharField, BooleanField, HasMany
@@ -311,7 +311,7 @@ class User(Model):
     posts = HasMany("Post", foreign_key="author_id")
 ```
 
-### Style 2: `class Meta` (Django style)
+### Style 2: `class Meta`
 
 ```python
 from doveorm import Model, CharField, TextField, BooleanField, ForeignKey, DateTimeField
@@ -404,7 +404,7 @@ print(ticket.id)  # UUID('a1b2c3d4-...')
 - Reserved words (`order`, `user`, `group`, `limit`, …) and mixed-case names (`firstName`) work
   as table and column names on every backend: DoveORM quotes a name only when it has to
   (`"order"`, or `` `order` `` on MySQL), so ordinary names produce plain, unquoted SQL.
-  On PostgreSQL a mixed-case name is case-sensitive, as it is in Django. Keep names to 63
+  On PostgreSQL a mixed-case name is case-sensitive. Keep names to 63
   characters there; PostgreSQL truncates longer ones.
 - Field names may not start with `_` and may not shadow the Model API (`save`, `delete`, `where`, `to_dict`, …).
 - A model may declare at most one primary key.
@@ -452,7 +452,7 @@ PostgreSQL, run
 | `IPAddressField()` | `TEXT` | `VARCHAR(15)` | IPv4 |
 | `GenericIPAddressField(protocol="both")` | `TEXT` | `VARCHAR(45)` | IPv4 / IPv6 |
 
-`contains` / `startswith` / `endswith` follow each database's own `LIKE`, as in Django:
+`contains` / `startswith` / `endswith` follow each database's own `LIKE`:
 case-sensitive on PostgreSQL, case-insensitive for ASCII on SQLite, collation-dependent on
 MySQL. Use the `i…` variants (`icontains`, …) for case-insensitive matching on every backend.
 
@@ -591,13 +591,13 @@ Unknown fields or lookups (e.g. `age__gtee=18`) raise `ValueError` instead of si
 matching the wrong rows. `contains` / `startswith` / `endswith` follow the backend's
 collation for case sensitivity; the `i*` variants are always case-insensitive.
 
-The same query returns the same rows on SQLite, MySQL and PostgreSQL, following Django's rules:
+The same query returns the same rows on SQLite, MySQL and PostgreSQL, following these rules:
 
-- **Lookup values are checked by the field** (`Field.get_prep_value()`, as in Django). A
+- **Lookup values are checked by the field** (`Field.get_prep_value()`). A
   value the column cannot hold raises `ValidationError` instead of matching the wrong rows:
   `where(active="false")`, `where(age="abc")` and `where(token="not-a-uuid")` all raise.
   Values that clearly mean one thing are converted: `age="30"`, `age=30.0`, and for
-  booleans Django's `"t"/"True"/"1"` and `"f"/"False"/"0"`.
+  booleans `"t"/"True"/"1"` and `"f"/"False"/"0"`.
 - **NULL rows are kept by negation**: `exclude(name="x")`, `~Q(name="x")`, `name__ne="x"` and
   `name__not_in=[...]` also return rows whose `name` is NULL, because NULL is not `"x"`.
   (Plain SQL `NOT (name = 'x')` silently drops them.)
@@ -648,7 +648,7 @@ user, created = User.get_or_create(
 users = User.bulk_create([User(username=f"u{i}") for i in range(100)])   # one transaction
 ```
 
-### Dynamic finders (Spring Boot / JPA style) 🔥
+### Dynamic finders 🔥
 
 ```python
 user  = User.findByUsername("titus")                  # first match or None
@@ -894,7 +894,7 @@ so keep side effects outside the database out of it.
 
 ## 🔄 Migrations
 
-Django-style migrations: you change your models, `doveorm generate` writes a migration file
+Migrations: you change your models, `doveorm generate` writes a migration file
 describing the change, and `doveorm apply` applies it. Files live in your project and go in
 version control. Applied migrations are recorded in the `doveorm_migrations` table. (Older versions used `migrations`; that table is
 renamed automatically the first time a migration is applied.)
@@ -1351,7 +1351,7 @@ db = PostgreSQLDatabase(
 - Serialization failures, deadlocks and lock-not-available errors are retried by
   `run_in_transaction()`. Use `isolation_level="SERIALIZABLE"` together with it for
   conflict-free read-modify-write logic.
-- Parameters are bound client-side by default, as in Django: no server-side prepared
+- Parameters are bound client-side by default: no server-side prepared
   statements, so it works behind PgBouncer in transaction-pooling mode, and psycopg 3 and
   psycopg2 behave the same. `server_side_binding=True` (psycopg 3) opts in to server-side
   binding.

@@ -33,7 +33,7 @@ Behaviour
   have applied them).
 * Names that need it (reserved words, upper-case letters) are quoted, so
   ``userName`` or ``order`` work as column and table names.
-* Parameters are bound client-side (like Django's default): no server-side
+* Parameters are bound client-side: no server-side
   prepared statements, so the driver works behind PgBouncer in transaction
   pooling mode.  Pass ``server_side_binding=True`` (psycopg 3) to opt in.
 * Sessions run in UTC, matching how DoveORM stores datetimes.

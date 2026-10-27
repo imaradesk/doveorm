@@ -32,7 +32,7 @@ class BooleanField(Field):
         if value is None: return None
         return 1 if value else 0
 
-    _TRUE = ("t", "True", "1")      # the strings Django's BooleanField accepts
+    _TRUE = ("t", "True", "1")      # the strings accepted as booleans
     _FALSE = ("f", "False", "0")
 
     def get_prep_value(self, value):

@@ -878,7 +878,7 @@ class TestDriverArchitecture(unittest.TestCase):
 
 
 # ══════════════════════════════════════════════════════════
-# New Django-style fields
+# Additional field types
 # ══════════════════════════════════════════════════════════
 
 class TestNewNumericFields(unittest.TestCase):
@@ -1196,7 +1196,7 @@ class TestChoicesValidation(unittest.TestCase):
 
 
 # ══════════════════════════════════════════════════════════
-# Dynamic findBy – Spring Boot JPA-style finders
+# Dynamic findBy finders
 # ══════════════════════════════════════════════════════════
 
 class TestDynamicFindBy(unittest.TestCase):

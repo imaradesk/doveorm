@@ -1,6 +1,6 @@
 """
 tests/test_accuracy.py
-Query semantics that must be identical on every backend (and match Django):
+Query semantics that must be identical on every backend:
 NULL handling under negation, lookup-value validation, quoted identifiers,
 decimal / boolean / JSON lookups, text lookups on non-text columns and
 explicit auto-increment keys.
@@ -72,7 +72,7 @@ class _Backend:
 
 class _AccuracyTests(_Backend):
 
-    # ── NULLs under negation (Django semantics) ──
+    # ── NULLs under negation ──
 
     def test_exclude_keeps_null_rows(self):
         P = self.people()
@@ -106,7 +106,7 @@ class _AccuracyTests(_Backend):
         self.assertEqual(P.where(age="30").count(), 1)
         self.assertEqual(P.where(age=30.0).count(), 1)
         self.assertEqual(P.where(active=1).count(), 2)
-        self.assertEqual(P.where(active="True").count(), 2)    # Django's accepted strings
+        self.assertEqual(P.where(active="True").count(), 2)    # accepted boolean strings
         self.assertEqual(P.where(active="0").count(), 1)
         self.assertEqual(P.where(token=str(uuid.UUID(int=0xABCDEF))).count(), 1)
 
