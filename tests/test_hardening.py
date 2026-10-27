@@ -160,6 +160,18 @@ class TestIdentifierValidation(unittest.TestCase):
             ForeignKey("X", on_delete="SET NULL", nullable=False)
         self.assertEqual(ForeignKey("X", on_delete="set  null").on_delete, "SET NULL")
 
+    def test_on_delete_constants(self):
+        import doveorm
+        from doveorm import fields
+        self.assertEqual(ForeignKey("X", on_delete=fields.CASCADE).on_delete, "CASCADE")
+        self.assertEqual(ForeignKey("X", on_delete=fields.SET_NULL, nullable=True).on_delete, "SET NULL")
+        self.assertEqual(ForeignKey("X", on_delete="set_null", nullable=True).on_delete, "SET NULL")
+        self.assertEqual(ForeignKey("X", on_delete=doveorm.RESTRICT).on_delete, "RESTRICT")
+        self.assertEqual(ForeignKey("X", on_delete=fields.NO_ACTION).on_delete, "NO ACTION")
+        self.assertEqual(ForeignKey("X", on_delete=fields.SET_DEFAULT).on_delete, "SET DEFAULT")
+        with self.assertRaises(ValueError):
+            ForeignKey("X", on_delete=fields.SET_NULL, nullable=False)
+
     def test_m2m_through_validated(self):
         with self.assertRaises(ValueError):
             ManyToMany("X", through="j; DROP TABLE x")
