@@ -1,6 +1,6 @@
 """
 tests/test_migrations.py
-Tests for the Django-style migration system (doveorm.migrations).
+Tests for the migration system (doveorm.migrations).
 """
 import datetime
 import decimal

@@ -22,7 +22,7 @@ class ModelMeta(type):
     2. Injects an ``id = AutoField()`` if no primary key was declared.
     3. Registers every concrete Model subclass in a global registry.
     4. Validates table options (names, indexes, ordering).
-    5. Provides dynamic ``findBy<Field>`` methods (Spring Boot-style).
+    5. Provides dynamic ``findBy<Field>`` methods.
     """
     _registry: dict[str, "Model"] = {}
     _registry_lock = threading.RLock()
@@ -117,7 +117,7 @@ class ModelMeta(type):
         return cls
 
     # ──────────────────────────────────────────
-    # Dynamic findBy<Field> — Spring Boot-style
+    # Dynamic findBy<Field>
     # ──────────────────────────────────────────
 
     def __getattr__(cls, name: str):

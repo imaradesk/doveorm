@@ -1,5 +1,5 @@
 """
-DoveORM migrations — Django-style schema migrations.
+DoveORM migrations — schema migrations.
 
 Workflow (see ``doveorm --help``)::
 

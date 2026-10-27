@@ -3,9 +3,9 @@ DoveORM Model
 Base class for all ORM models.
 
 Supports:
-  - Django-style ``class Meta`` for table name / indexes
+  - ``class Meta`` for table name / indexes
   - ``@table()`` decorator as an alternative to ``class Meta``
-  - Spring Boot-style dynamic finders:  ``User.findByUsername("titus")``
+  - Dynamic finders:  ``User.findByUsername("titus")``
 """
 from __future__ import annotations
 

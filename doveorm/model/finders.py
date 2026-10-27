@@ -1,4 +1,4 @@
-"""Spring Boot-style dynamic finders: ``findBy…``, ``findAllBy…``, ``countBy…``, ``existsBy…``."""
+"""Dynamic finders: ``findBy…``, ``findAllBy…``, ``countBy…``, ``existsBy…``."""
 from __future__ import annotations
 
 import re

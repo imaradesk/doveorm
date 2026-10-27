@@ -15,8 +15,7 @@ def table(
 ):
     """
     Class decorator — an alternative to ``class Meta`` for configuring
-    a Model's table options.  Inspired by Spring Boot / JPA ``@Entity``
-    and ``@Table`` annotations.
+    a Model's table options.
 
     Usage::
 

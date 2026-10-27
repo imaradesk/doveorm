@@ -20,7 +20,7 @@ class SQLCompilerMixin:
 
     # Lookups whose SQL is UNKNOWN (not FALSE) when the column is NULL.  Inside a
     # negation they get an explicit ``col IS NOT NULL`` so NOT(...) keeps NULL rows,
-    # matching Django: exclude(name="x") also returns rows whose name is NULL.
+    # so that exclude(name="x") also returns rows whose name is NULL.
     _NULL_SENSITIVE = frozenset({"eq", "exact", "iexact", "in", "range", "like"}
                                 | set(_COMPARISONS) | set(_PATTERNS))
 

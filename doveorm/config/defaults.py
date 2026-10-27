@@ -28,6 +28,6 @@ DEFAULTS: dict[str, Any] = {
     "LOG_QUERY_PARAMS": False,    # log bound values (may expose secrets / PII)
     "AUTO_WIRE_MODELS": True,     # auto-call Model.use(db) on every model
     "USE_TZ": False,              # DateTimeField returns aware UTC datetimes
-    # -- Django-style dict (takes precedence if set)
+    # -- DATABASES dict (takes precedence if set)
     "DATABASES": None,
 }

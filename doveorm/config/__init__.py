@@ -3,7 +3,7 @@ DoveORM Configuration
 ======================
 
 Provides a centralised, declarative way to configure the ORM —
-similar to Django's ``DATABASES`` setting — so that users never need
+with a ``DATABASES``-style setting — so that users never need
 to instantiate ``Database`` or driver objects by hand.
 
 Quick start
@@ -36,7 +36,7 @@ Quick start
         DATABASE_PASSWORD="secret",
     )
 
-    # Or use a dict (Django-style)
+    # Or use a dict
     configure(DATABASES={
         "default": {
             "ENGINE": "sqlite",
@@ -139,7 +139,7 @@ def configure_from_dict(d: dict) -> "Database":
     """Configure from a plain dict.
 
     If the dict has a ``DATABASES`` key containing a ``default`` entry,
-    that takes precedence (Django-style).
+    that takes precedence.
     """
     return configure(**d)
 
