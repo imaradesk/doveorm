@@ -11,6 +11,7 @@ def table(
     engine: str | None = None,
     charset: str | None = None,
     version_field: str | None = None,
+    migrate: bool | None = None,
 ):
     """
     Class decorator — an alternative to ``class Meta`` for configuring
@@ -46,6 +47,8 @@ def table(
     * **engine** – MySQL storage engine (default ``InnoDB``).
     * **charset** – MySQL charset (default ``utf8mb4``).
     * **version_field** – IntegerField used for optimistic locking.
+    * **migrate** – ``False`` for a table that migrations must not create, alter or
+      drop (a database view, or a table owned by another service).
 
     If both ``@table()`` and ``class Meta`` are present on the same model,
     the ``@table()`` values take precedence.
@@ -67,6 +70,8 @@ def table(
             cls._meta_charset = charset
         if version_field is not None:
             cls._meta_version_field = version_field
+        if migrate is not None:
+            cls._migrate = bool(migrate)
         if not cls._abstract:
             cls._validate_options()
         return cls

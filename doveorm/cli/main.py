@@ -232,7 +232,7 @@ def _toml_list(items) -> str:
 def _require_models() -> None:
     """Refuse to diff against an empty model set: that would 'delete' every table."""
     from ..migrations.commands import project_models
-    if not project_models():
+    if not project_models(include_unmigrated=True):
         raise ConfigurationError(
             "No models are registered (none found named models.py). List your model modules under 'models' in "
             f"{CONFIG_FILE} (or pass --models myapp.models)."
@@ -444,7 +444,7 @@ def cmd_doctor(project: Project, args) -> int:
 def cmd_models(project: Project, args) -> int:
     from ..migrations.commands import project_models
     from ..migrations.state import ModelState
-    models = project_models()
+    models = project_models(include_unmigrated=True)
     if not models:
         print("No models registered. List your model modules under 'models' in doveorm.toml.")
         return 0
@@ -459,7 +459,9 @@ def cmd_models(project: Project, args) -> int:
     out = []
     for model in models:
         ms = ModelState.from_model(model)
-        if tables is None:
+        if not model._migrate:
+            state = "external" if tables is None or ms.table in tables else "external (table missing)"
+        elif tables is None:
             state = "?"
         elif ms.table not in tables:
             state = "missing"
@@ -479,7 +481,7 @@ def cmd_console(project: Project, args) -> int:
         ns["db"] = project.database()
     except ConfigurationError:
         pass
-    for model in project_models():
+    for model in project_models(include_unmigrated=True):
         ns.setdefault(model.__name__, model)
     names = sorted(k for k in ns if k not in ("doveorm", "db"))
     banner = (f"DoveORM {doveorm.__version__} console — "

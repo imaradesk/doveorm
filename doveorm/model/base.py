@@ -61,6 +61,7 @@ class Model(FinderMixin, SchemaMixin, metaclass=ModelMeta):
     _meta_charset: str | None = None
     _meta_version_field: str | None = None
     _abstract: bool = False
+    _migrate: bool = True          # False: the table is not created or changed by migrations
 
     def __init__(self, **kwargs):
         cls = type(self)

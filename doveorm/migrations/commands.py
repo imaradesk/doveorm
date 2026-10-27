@@ -39,14 +39,19 @@ class MigrationFile:
     written: bool = False
 
 
-def project_models(models=None) -> list[type]:
-    """Concrete models to migrate (default: every registered model)."""
+def project_models(models=None, *, include_unmigrated: bool = False) -> list[type]:
+    """Concrete models to migrate (default: every registered model).
+
+    Models declared with ``migrate = False`` are left out unless *include_unmigrated*.
+    """
     if models is None:
         from ..model import ModelMeta
         models = list(ModelMeta._registry.values())
     out = []
     for m in models:
         if getattr(m, "_abstract", False) or getattr(m, "_doveorm_internal", False):
+            continue
+        if not include_unmigrated and not getattr(m, "_migrate", True):
             continue
         out.append(m)
     return sorted(out, key=lambda m: m.__name__)

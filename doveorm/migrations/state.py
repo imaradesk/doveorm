@@ -203,6 +203,14 @@ class ProjectState:
         for ms in self.models.values():
             for field in ms.fields.values():
                 if isinstance(field, ForeignKey) and field.to not in self.models:
+                    from ..model import ModelMeta
+                    target = ModelMeta._registry.get(field.to) if isinstance(field.to, str) else None
+                    if target is not None and not getattr(target, "_migrate", True):
+                        raise MigrationError(
+                            f"{ms.name}.{field.name} references {field.to!r}, which is declared with "
+                            "migrate = False. Migrations can't build a foreign key to a table they don't "
+                            "manage; use a plain integer/UUID field for the key instead."
+                        )
                     raise MigrationError(
                         f"{ms.name}.{field.name} references model {field.to!r}, which is not "
                         "part of the migrated models."

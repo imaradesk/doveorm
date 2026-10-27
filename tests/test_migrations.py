@@ -14,7 +14,8 @@ import uuid
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import doveorm
-from doveorm import Database, MigrationError, Model, fields as F, migrations as M
+from doveorm import Database, MigrationError, Model, fields as F, migrations as M, table
+from doveorm.migrations.commands import project_models
 from doveorm.migrations.loader import MigrationLoader
 from doveorm.migrations.writer import Serializer, write_migration
 from doveorm.model import ModelMeta
@@ -295,6 +296,31 @@ class TestSQLiteEndToEnd(RegistryMixin, unittest.TestCase):
         self.assertEqual(self.migrate(), [("0001_initial", False)])
         self.assertEqual(self.migrate(), [])
         self.assertTrue(self.db.table_exists("posts"))
+
+    def test_migrate_false_models_are_left_alone(self):
+        Mine = self.define("Mine", {"name": F.CharField(max_length=20)})
+        Ext = self.define("Ext", {"name": F.CharField(max_length=20)}, meta={"migrate": False})
+        Deco = self.define("Deco", {"name": F.CharField(max_length=20)})
+        table(migrate=False)(Deco)
+        self.assertFalse(Ext._migrate)
+        self.assertFalse(Deco._migrate)
+        self.assertEqual([m.__name__ for m in project_models([Mine, Ext, Deco])], ["Mine"])
+        self.make([Mine, Ext, Deco])
+        self.migrate()
+        self.assertTrue(self.db.table_exists("mines"))
+        self.assertFalse(self.db.table_exists("exts"))
+        self.assertFalse(self.db.table_exists("decos"))
+        self.assertIsNone(self.make([Mine, Ext, Deco]))
+        # the model still works against a table someone else created
+        self.db.execute("CREATE TABLE exts (id INTEGER PRIMARY KEY, name VARCHAR(20))")
+        Ext.create(name="x")
+        self.assertEqual(Ext.filter(name="x").count(), 1)
+
+    def test_foreign_key_to_migrate_false_model_is_explained(self):
+        Ext = self.define("Ext2", {"name": F.CharField(max_length=20)}, meta={"migrate": False})
+        Mine = self.define("Mine2", {"ext_id": F.ForeignKey("Ext2")})
+        with self.assertRaisesRegex(Exception, "migrate = False"):
+            self.make([Mine, Ext])
 
     def test_remake_keeps_rows_and_does_not_cascade(self):
         self.seed()
